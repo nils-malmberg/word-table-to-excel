@@ -74,3 +74,4 @@ foreach ($view in '/reg:64', '/reg:32') {
 if (Test-Path $installDir) { throw "Désinstallation incomplète : $installDir" }
 
 Write-Host 'Test de fumée réussi.'
+exit 0   # sinon le code du dernier « reg query » (clé absente, attendu) serait renvoyé
