@@ -1,0 +1,65 @@
+name: Release
+
+# Publie une version : vérification complète sous Windows (tests, installation sans droits
+# administrateur depuis le dossier Installation/), puis création de la release GitHub avec le
+# paquet prêt à l'emploi WordTableToExcel-<tag>.zip.
+# Déclenchement : poussée d'un tag « v* », ou manuellement (onglet Actions) en indiquant le tag.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de la version (ex. v1.0.0) ; créé sur le commit choisi s'il n'existe pas"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Vérification (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Tests
+        run: dotnet test tests/WordTableToExcel.Tests -c Release
+
+      - name: Installation depuis le dossier Installation/ (sans droits administrateur)
+        shell: powershell
+        run: ./tests/ci/com-smoke-test.ps1 -Folder Installation
+
+  publish:
+    name: Publication de la release
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Paquet d'installation
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          DIR="WordTableToExcel-$TAG"
+          mkdir -p "out/$DIR"
+          cp Installation/* "out/$DIR/"
+          cp tests/fixtures/rapport_test_complexe.docx "out/$DIR/Exemple - rapport de test.docx"
+          (cd out && zip -r -X "../$DIR.zip" "$DIR")
+          unzip -l "$DIR.zip"
+
+      - name: Création de la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES=".github/release-notes/$TAG.md"
+          if [ -f "$NOTES" ]; then NOTE_ARGS=(--notes-file "$NOTES"); else NOTE_ARGS=(--generate-notes); fi
+          gh release create "$TAG" "WordTableToExcel-$TAG.zip" \
+            --title "Tableaux Word vers Excel $TAG" \
+            --target "${{ github.sha }}" \
+            "${NOTE_ARGS[@]}"
