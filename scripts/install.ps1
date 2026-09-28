@@ -46,6 +46,23 @@ function Set-RegValue {
     Invoke-Reg $arguments
 }
 
+function Get-LongPath {
+    param([string]$Path)
+    try {
+        if (-not ('WordTableToExcel.Setup.NativePath' -as [type])) {
+            Add-Type -Namespace WordTableToExcel.Setup -Name NativePath -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+public static extern int GetLongPathName(string shortPath, System.Text.StringBuilder longPath, int bufferSize);
+'@
+        }
+        $buffer = New-Object System.Text.StringBuilder 1024
+        if ([WordTableToExcel.Setup.NativePath]::GetLongPathName($Path, $buffer, $buffer.Capacity) -gt 0) { return $buffer.ToString() }
+    } catch {
+        Write-Verbose "GetLongPathName indisponible : $_"
+    }
+    return $Path
+}
+
 Write-Host "Installation de « $FriendlyName »..." -ForegroundColor Cyan
 
 if (-not (Test-Path -LiteralPath $SourceDll)) {
@@ -85,6 +102,8 @@ try {
 }
 
 # 2. Enregistrement COM par utilisateur (équivalent de « regasm /codebase », sans droits administrateur).
+# Le CodeBase doit être un chemin long : .NET ne retrouve pas la DLL via un nom court 8.3 (ex. « JEAN-P~1 »).
+$dll = Get-LongPath $dll
 $codeBase = 'file:///' + ($dll -replace '\\', '/')
 $is64 = ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') -or ($env:PROCESSOR_ARCHITEW6432 -eq 'AMD64') -or ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') -or ($env:PROCESSOR_ARCHITEW6432 -eq 'ARM64')
 $views = @('/reg:32')
