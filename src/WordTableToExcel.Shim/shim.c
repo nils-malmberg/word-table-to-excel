@@ -138,7 +138,9 @@ static HRESULT CreateManagedAddIn(IUnknown **result)
     HostRuntimeHost *runtimeHost = NULL;
     WCHAR assemblyPath[MAX_PATH * 2];
     WCHAR argument[2 * sizeof(ULONG_PTR) + 1];
-    IUnknown *created = NULL;
+    /* « volatile » : la méthode .NET écrit dans cette variable à partir de son adresse transmise sous forme
+       de texte ; sans cela, le compilateur suppose qu'elle vaut toujours NULL après l'appel. */
+    IUnknown *volatile created = NULL;
     DWORD returnValue = 0;
 
     *result = NULL;
@@ -171,7 +173,7 @@ static HRESULT CreateManagedAddIn(IUnknown **result)
     hr = runtimeHost->lpVtbl->Start(runtimeHost);   /* S_FALSE si le CLR est déjà démarré */
     if (FAILED(hr)) { AppendLog("démarrage du CLR", hr); goto done; }
 
-    ToHex((ULONG_PTR)&created, argument);
+    ToHex((ULONG_PTR)(void *)&created, argument);
     hr = runtimeHost->lpVtbl->ExecuteInDefaultAppDomain(runtimeHost, assemblyPath,
         L"WordTableToExcel.AddIn.ShimEntryPoint", L"CreateAddIn", argument, &returnValue);
     if (FAILED(hr)) { AppendLog("chargement de WordTableToExcel.dll (ExecuteInDefaultAppDomain)", hr); goto done; }
@@ -186,7 +188,10 @@ static HRESULT CreateManagedAddIn(IUnknown **result)
     hr = S_OK;
 
 done:
-    if (created) created->lpVtbl->Release(created);
+    if (created) {
+        IUnknown *leftover = created;
+        leftover->lpVtbl->Release(leftover);
+    }
     if (runtimeHost) runtimeHost->lpVtbl->Release(runtimeHost);
     if (runtimeInfo) runtimeInfo->lpVtbl->Release(runtimeInfo);
     if (metaHost) metaHost->lpVtbl->Release(metaHost);
