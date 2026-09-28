@@ -181,12 +181,18 @@ namespace WordTableToExcel.AddIn
 
         // ------------------------------------------------------------------ Enregistrement (regasm)
 
-        /// <summary>Appelé par « regasm /codebase » : déclare le complément auprès de Word pour l'utilisateur courant.</summary>
+        private const string AddInKeyPath = @"Software\Microsoft\Office\Word\Addins\" + ProgIdValue;
+
+        /// <summary>
+        /// Appelé par « regasm /codebase » (droits administrateur) : déclare le complément auprès de Word pour
+        /// tous les utilisateurs. RegAsm 64 bits écrit dans la vue 64 bits du registre (Office 64 bits),
+        /// RegAsm 32 bits dans la vue WOW6432Node (Office 32 bits).
+        /// </summary>
         [ComRegisterFunction]
         public static void RegisterFunction(Type type)
         {
             if (type != typeof(Connect)) return;
-            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Office\Word\Addins\" + ProgIdValue))
+            using (var key = Registry.LocalMachine.CreateSubKey(AddInKeyPath))
             {
                 if (key == null) return;
                 key.SetValue("FriendlyName", FriendlyName);
@@ -201,7 +207,7 @@ namespace WordTableToExcel.AddIn
             if (type != typeof(Connect)) return;
             try
             {
-                Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Office\Word\Addins\" + ProgIdValue);
+                Registry.LocalMachine.DeleteSubKeyTree(AddInKeyPath);
             }
             catch (ArgumentException)
             {

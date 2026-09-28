@@ -41,22 +41,24 @@ tout l'accès à Word se fait en liaison tardive, ce qui le rend indépendant de
 
 ## Installation
 
-Aucun droit administrateur n'est nécessaire : l'installation se fait pour l'utilisateur courant.
+L'installation se fait une fois par poste, pour tous les utilisateurs ; elle demande une confirmation
+administrateur (fenêtre UAC de Windows).
 
 1. Récupérez le dossier `WordTableToExcel` :
    - soit l'artefact **WordTableToExcel** produit par l'intégration continue GitHub (onglet *Actions*) ;
    - soit en compilant vous-même (voir [Compilation](#compilation-et-tests)) : le dossier est créé dans `dist\`.
 2. **Fermez Word.**
-3. Double-cliquez sur **`install.cmd`**.
+3. Double-cliquez sur **`install.cmd`** et acceptez la demande d'élévation.
 4. Ouvrez Word : le bouton **Tableaux vers Excel** apparaît à droite de l'onglet **Accueil** (et de l'onglet **Références**).
 
-Le script copie `WordTableToExcel.dll` dans `%LOCALAPPDATA%\WordTableToExcel`, l'enregistre comme
-composant COM pour l'utilisateur (`HKCU`) et le déclare auprès de Word.
+Le script copie `WordTableToExcel.dll` dans `C:\Program Files\WordTableToExcel`, l'enregistre comme
+composant COM avec `RegAsm` 64 bits et 32 bits (Office 64 ou 32 bits, installation MSI ou « Démarrer en
+un clic ») et le déclare auprès de Word.
 
-> Installation pour tous les utilisateurs d'un poste (administrateur) : exécutez
-> `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\regasm.exe /codebase WordTableToExcel.dll`
-> (Office 64 bits) ou `%WINDIR%\Microsoft.NET\Framework\v4.0.30319\regasm.exe /codebase WordTableToExcel.dll`
-> (Office 32 bits) depuis une invite de commandes administrateur.
+> Pourquoi des droits administrateur ? Un complément COM écrit en .NET doit être enregistré au niveau du
+> poste : l'intégration continue a montré que, sur les Windows récents, un enregistrement par
+> utilisateur (HKCU) de ce type de composant n'est pas activable, alors que l'enregistrement machine
+> l'est en 32 comme en 64 bits.
 
 ## Utilisation
 
@@ -150,9 +152,9 @@ Le document ouvert est **uniquement lu** :
 
 ## Désinstallation
 
-Fermez Word, puis double-cliquez sur **`uninstall.cmd`** (dans le dossier d'installation ou le dossier
-`scripts` du projet). Les clés de registre, les fichiers et les préférences sont supprimés
-(`uninstall.ps1 -KeepSettings` conserve les préférences).
+Fermez Word, puis double-cliquez sur **`uninstall.cmd`** (dossier `WordTableToExcel` fourni ou dossier
+`scripts` du projet) et acceptez la demande d'élévation. L'enregistrement COM, la déclaration auprès de
+Word, les fichiers et les préférences sont supprimés (`uninstall.ps1 -KeepSettings` conserve les préférences).
 
 ## Dépannage
 
@@ -160,7 +162,7 @@ Fermez Word, puis double-cliquez sur **`uninstall.cmd`** (dans le dossier d'inst
 |---|---|
 | Le bouton n'apparaît pas | **Fichier › Options › Compléments**, liste *Gérer : Compléments COM* › **Atteindre…** : cochez « Tableaux Word vers Excel ». |
 | Le complément a été désactivé par Word | **Fichier › Options › Compléments**, *Gérer : Éléments désactivés* › **Atteindre…** : réactivez-le, puis redémarrez Word. |
-| « Comportement au chargement : non chargé. Une erreur d'exécution s'est produite » | Vérifiez que .NET Framework 4.x est installé ; relancez `install.cmd` (il débloque la DLL téléchargée). |
+| « Comportement au chargement : non chargé. Une erreur d'exécution s'est produite » | Vérifiez que .NET Framework 4.x est installé ; relancez `install.cmd` (il débloque la DLL téléchargée et la réenregistre). |
 | Le classeur ne peut pas être enregistré | Le fichier est probablement ouvert dans Excel : fermez-le et recommencez. |
 | Un tableau n'est pas exporté ou apparaît simplifié | Le compte rendu final et le journal le signalent. |
 
@@ -175,7 +177,7 @@ assemblys de référence NuGet ; Visual Studio 2019+ ou Rider peuvent aussi ouvr
 build.cmd
 ```
 
-exécute les tests, compile `WordTableToExcel.dll` (AnyCPU) et prépare `dist\WordTableToExcel\`
+exécute les tests, compile `WordTableToExcel.dll` (AnyCPU, signée par nom fort) et prépare `dist\WordTableToExcel\`
 (DLL + scripts d'installation). Commandes équivalentes :
 
 ```bash
@@ -189,9 +191,11 @@ feuilles, la conversion des nombres, l'écriture du `.xlsx` et la lecture Word v
 objet Word (`tests/WordTableToExcel.Tests/Fakes`). Ils s'exécutent sans Word.
 
 L'intégration continue (`.github/workflows/build.yml`, Windows) exécute ces tests, compile la DLL, puis
-vérifie l'installation réelle : script `install.ps1`, activation COM du complément depuis un processus
-32 bits et 64 bits, chargement du ruban, désinstallation. Le fonctionnement dans Word lui-même
-(clic sur le bouton, lecture d'un vrai document) se valide sur un poste équipé de Word.
+vérifie l'installation réelle : script `install.ps1`, clés de registre dans les vues 32 et 64 bits,
+activation COM du complément et lecture du ruban par un client COM natif (comme Word) en 32 et 64 bits,
+en administrateur et en utilisateur standard, puis `uninstall.ps1`. Le fonctionnement dans Word
+lui-même (clic sur le bouton, lecture d'un vrai document) se valide sur un poste équipé de Word ;
+`tests/fixtures/medium_shading_merged.docx` peut servir de document d'essai.
 
 ## Architecture
 

@@ -29,11 +29,6 @@ jobs:
           Copy-Item scripts/* dist/WordTableToExcel/
           Copy-Item README.md dist/WordTableToExcel/LISEZMOI.md
 
-      - name: Diagnostic enregistrement HKCU (temporaire)
-        continue-on-error: true
-        shell: powershell
-        run: ./tests/ci/hkcu-experiment.ps1 -Dist dist/WordTableToExcel
-
       - name: Test d'installation et d'activation COM (32 et 64 bits)
         shell: powershell
         run: ./tests/ci/com-smoke-test.ps1 -Dist dist/WordTableToExcel
