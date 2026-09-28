@@ -18,6 +18,7 @@ $installDir = Join-Path $env:ProgramFiles 'WordTableToExcel'
 $hosts = @("$env:WINDIR\System32\cscript.exe", "$env:WINDIR\SysWOW64\cscript.exe")
 
 function Test-Key([string]$key, [string]$view) {
+    $ErrorActionPreference = 'Continue'   # « clé introuvable » est une réponse attendue, pas une erreur
     & reg.exe query $key $view 2>&1 | Out-Null
     return $LASTEXITCODE -eq 0
 }
