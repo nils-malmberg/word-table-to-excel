@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Schéma 2006 : compris par Word 2007 et toutes les versions suivantes. -->
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui">
+  <ribbon>
+    <tabs>
+      <tab idMso="TabHome">
+        <group id="wtteGroupHome" label="Export Excel">
+          <button id="wtteExportHome"
+                  label="Tableaux vers Excel"
+                  size="large"
+                  imageMso="TableExcelSpreadsheetInsert"
+                  screentip="Exporter les tableaux vers Excel"
+                  supertip="Crée un classeur Excel avec une feuille par tableau du document (tous les tableaux, ou seulement ceux qui ont une légende), en conservant la mise en forme. Le document Word n'est pas modifié."
+                  keytip="XT"
+                  onAction="OnExportClick" />
+        </group>
+      </tab>
+      <tab idMso="TabReferences">
+        <group id="wtteGroupReferences" label="Export Excel">
+          <button id="wtteExportReferences"
+                  label="Tableaux vers Excel"
+                  size="large"
+                  imageMso="TableExcelSpreadsheetInsert"
+                  screentip="Exporter les tableaux vers Excel"
+                  supertip="Exporte les tableaux légendés (ou tous les tableaux) vers un classeur Excel, une feuille par tableau."
+                  onAction="OnExportClick" />
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

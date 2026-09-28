@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests exécutables sur toute plate-forme (.NET 8) : ils compilent le cœur du complément
+    (Core/) et la couche de lecture Word (Word/), qui n'utilise que la liaison tardive
+    (dynamic) et peut donc être testée avec de faux objets Word.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>WordTableToExcel.Tests</RootNamespace>
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\WordTableToExcel\Core\**\*.cs" Link="Linked\Core\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\WordTableToExcel\Word\**\*.cs" Link="Linked\Word\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\WordTableToExcel\Export\ExportPlan.cs" Link="Linked\Export\ExportPlan.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\fixtures\*.xml" Link="fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

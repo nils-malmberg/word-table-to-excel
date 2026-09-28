@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Complément COM pour Microsoft Word (Windows).
+    Cible .NET Framework 4.0 pour rester compatible avec le plus grand nombre de
+    versions de Windows et d'Office. Aucune dépendance aux PIA Office : tout
+    l'accès à Word est fait en liaison tardive (dynamic / IDispatch), ce qui
+    permet de fonctionner avec n'importe quelle version de Word, 32 ou 64 bits.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net40</TargetFramework>
+    <OutputType>Library</OutputType>
+    <AssemblyName>WordTableToExcel</AssemblyName>
+    <RootNamespace>WordTableToExcel</RootNamespace>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <LangVersion>7.3</LangVersion>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>Tableaux Word vers Excel</Product>
+    <Description>Complément COM Word : exporte les tableaux du document vers un classeur Excel en conservant la mise en forme.</Description>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="AddIn\Ribbon.xml" LogicalName="WordTableToExcel.Ribbon.xml" />
+  </ItemGroup>
+
+</Project>

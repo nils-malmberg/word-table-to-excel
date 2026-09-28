@@ -1,0 +1,443 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using WordTableToExcel.Core.Layout;
+using WordTableToExcel.Core.Model;
+using WordTableToExcel.Core.Text;
+
+namespace WordTableToExcel.Word
+{
+    /// <summary>
+    /// Lit un tableau Word (objet COM Word.Table) et produit un <see cref="TableModel"/> :
+    /// <list type="number">
+    /// <item>structure exacte (grille, fusions, fonds, bordures, styles de tableau) depuis le XML du tableau ;</item>
+    /// <item>texte et mise en forme des caractères depuis le modèle objet (valeurs effectives calculées par Word) ;</item>
+    /// <item>mode de repli COM complet si le XML n'est pas disponible (anciennes versions, document protégé).</item>
+    /// </list>
+    /// Toutes les opérations sont en lecture seule.
+    /// </summary>
+    public sealed class WordTableReader
+    {
+        private sealed class ComCell
+        {
+            public object Cell;
+            public int RowIndex;
+            public int ColumnIndex;
+            public int Start;
+            public int End;
+        }
+
+        private readonly dynamic _document;
+        private readonly WordRunReader _runReader;
+        private readonly Func<int, Rgb?> _themeLookup;
+        private readonly Action<string> _log;
+
+        public WordTableReader(object document, Action<string> log)
+        {
+            if (document == null) throw new ArgumentNullException("document");
+            _document = document;
+            _log = log ?? (s => { });
+            _themeLookup = CreateThemeLookup(document);
+            _runReader = new WordRunReader(document, _themeLookup);
+        }
+
+        /// <param name="table">Objet Word.Table.</param>
+        /// <param name="documentIndex">Rang du tableau dans le document (base 1).</param>
+        /// <param name="progress">Progression facultative (appelée régulièrement avec le nombre de cellules lues).</param>
+        public TableModel Read(object table, int documentIndex, Action<int, int> progress)
+        {
+            dynamic t = table;
+            var model = new TableModel { DocumentIndex = documentIndex };
+
+            var comCells = EnumerateCells(t);
+            TableLayout layout = TryReadXmlLayout(t, model);
+            Dictionary<LayoutCell, ComCell> pairs = null;
+
+            if (layout != null)
+            {
+                pairs = Pair(layout, comCells, model);
+                if (pairs == null)
+                {
+                    model.Warnings.Add("structure XML incohérente avec Word, reconstruction à partir des largeurs de cellules");
+                    layout = null;
+                }
+            }
+            if (layout == null)
+            {
+                layout = BuildLayoutFromWidths(comCells);
+                pairs = layout.Cells.Where(c => c.SourceTag is ComCell).ToDictionary(c => c, c => (ComCell)c.SourceTag);
+            }
+
+            model.RowCount = layout.RowCount;
+            model.ColumnCount = layout.ColumnCount;
+            model.ColumnWidthsPt = layout.ColumnWidthsPt;
+            model.RowHeightsPt = layout.RowHeightsPt;
+            model.RowHeightExact = layout.RowHeightExact;
+
+            int done = 0;
+            foreach (var lc in layout.Cells)
+            {
+                var cell = new CellModel
+                {
+                    Row = lc.Row,
+                    Column = lc.Column,
+                    RowSpan = lc.RowSpan,
+                    ColumnSpan = lc.ColumnSpan,
+                    Borders = lc.Borders ?? new CellBorders(),
+                    VerticalAlignment = lc.VerticalAlignment,
+                    TextRotation = lc.TextRotation,
+                    Fill = lc.Fill
+                };
+
+                ComCell source;
+                if (pairs.TryGetValue(lc, out source))
+                {
+                    try
+                    {
+                        ReadCellContent(source, cell, layout.HasCellFormatting);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Une cellule illisible ne doit pas faire échouer tout le tableau.
+                        model.Warnings.Add(string.Format("cellule L{0}C{1} lue en texte brut ({2})", lc.Row + 1, lc.Column + 1, ex.Message));
+                        _log("Cellule " + lc + " : " + ex);
+                        ReadPlainText(source, cell);
+                    }
+                }
+
+                if (!cell.Fill.HasValue) cell.Fill = lc.ParagraphShading;
+                if (!cell.Fill.HasValue)
+                {
+                    // Excel ne sait pas surligner une partie de cellule : le surlignage devient le fond.
+                    foreach (var run in cell.Runs)
+                    {
+                        if (run.Highlight.HasValue && run.Text.Trim().Length > 0)
+                        {
+                            cell.Fill = run.Highlight;
+                            break;
+                        }
+                    }
+                }
+
+                model.Cells.Add(cell);
+                done++;
+                if (progress != null && (done % 20 == 0 || done == layout.Cells.Count)) progress(done, layout.Cells.Count);
+            }
+            return model;
+        }
+
+        // ------------------------------------------------------------------ structure
+
+        private List<ComCell> EnumerateCells(dynamic table)
+        {
+            bool hasNested = false;
+            int nesting = 1;
+            try
+            {
+                hasNested = WordCom.AsInt(table.Tables.Count) > 0;
+                if (hasNested) nesting = WordCom.AsInt(table.NestingLevel);
+            }
+            catch (Exception)
+            {
+                hasNested = false;
+            }
+
+            var list = new List<ComCell>();
+            foreach (dynamic cell in table.Range.Cells)
+            {
+                if (hasNested && WordCom.AsInt(cell.NestingLevel) != nesting) continue;
+                dynamic range = cell.Range;
+                list.Add(new ComCell
+                {
+                    Cell = cell,
+                    RowIndex = WordCom.AsInt(cell.RowIndex),
+                    ColumnIndex = WordCom.AsInt(cell.ColumnIndex),
+                    Start = WordCom.AsInt(range.Start),
+                    End = WordCom.AsInt(range.End)
+                });
+            }
+            return list;
+        }
+
+        private TableLayout TryReadXmlLayout(dynamic table, TableModel model)
+        {
+            dynamic range = table.Range;
+            string xml = TryGetXml(() => range.WordOpenXML);          // Word 2010+
+            if (xml == null) xml = TryGetXml(() => range.XML);        // Word 2003+ (WordprocessingML 2003)
+            if (xml == null) xml = TryGetXml(() => range.XML(false)); // même propriété, appelée avec son paramètre facultatif
+            if (xml == null)
+            {
+                _log("Tableau " + model.DocumentIndex + " : XML indisponible, mode de repli.");
+                return null;
+            }
+            try
+            {
+                var layout = WordXmlTableParser.Parse(xml);
+                if (layout == null) _log("Tableau " + model.DocumentIndex + " : aucun tableau dans le XML.");
+                return layout;
+            }
+            catch (Exception ex)
+            {
+                _log("Tableau " + model.DocumentIndex + " : XML illisible (" + ex.Message + ").");
+                return null;
+            }
+        }
+
+        private static string TryGetXml(Func<object> getter)
+        {
+            try
+            {
+                string xml = getter() as string;
+                return !string.IsNullOrEmpty(xml) && xml.TrimStart().StartsWith("<", StringComparison.Ordinal) ? xml : null;
+            }
+            catch (Exception)
+            {
+                return null; // propriété absente de cette version de Word, ou document protégé
+            }
+        }
+
+        /// <summary>
+        /// Associe les cellules de la structure XML aux cellules COM. Word ne présente pas les
+        /// continuations de fusion verticale dans sa collection Cells : on associe donc, ligne par
+        /// ligne, les cellules visibles dans l'ordre.
+        /// </summary>
+        private Dictionary<LayoutCell, ComCell> Pair(TableLayout layout, List<ComCell> comCells, TableModel model)
+        {
+            var byRow = comCells.GroupBy(c => c.RowIndex).ToDictionary(g => g.Key, g => g.OrderBy(c => c.ColumnIndex).ToList());
+            if (byRow.Count > 0 && byRow.Keys.Max() > layout.RowCount) return null;
+
+            var pairs = new Dictionary<LayoutCell, ComCell>();
+            int mismatchedRows = 0;
+            for (int r = 0; r < layout.RowCount; r++)
+            {
+                var visible = layout.CellsStartingOnSourceRow(r);
+                List<ComCell> row;
+                if (!byRow.TryGetValue(r + 1, out row)) row = new List<ComCell>();
+
+                if (row.Count == visible.Count)
+                {
+                    for (int i = 0; i < visible.Count; i++) pairs[visible[i]] = row[i];
+                }
+                else if (layout.SourceCellCounts != null && row.Count == layout.SourceCellCounts[r])
+                {
+                    foreach (var lc in visible)
+                    {
+                        if (lc.SourceIndex < row.Count) pairs[lc] = row[lc.SourceIndex];
+                    }
+                }
+                else
+                {
+                    mismatchedRows++;
+                    foreach (var lc in visible)
+                    {
+                        var match = row.FirstOrDefault(c => c.ColumnIndex == lc.SourceIndex + 1);
+                        if (match != null) pairs[lc] = match;
+                    }
+                }
+            }
+
+            if (mismatchedRows > 0)
+            {
+                if (mismatchedRows * 2 > layout.RowCount) return null;
+                model.Warnings.Add(mismatchedRows + " ligne(s) à la structure inhabituelle");
+            }
+            return pairs;
+        }
+
+        private TableLayout BuildLayoutFromWidths(List<ComCell> comCells)
+        {
+            var infos = new List<ComCellInfo>();
+            foreach (var c in comCells)
+            {
+                double width = 0;
+                try
+                {
+                    width = WordCom.AsDouble(((dynamic)c.Cell).Width);
+                }
+                catch (Exception)
+                {
+                    width = 0;
+                }
+                if (WordCom.IsUndefined(width)) width = 0;
+                infos.Add(new ComCellInfo { RowIndex = c.RowIndex, ColumnIndex = c.ColumnIndex, WidthPt = width, Tag = c });
+            }
+            return WidthGridBuilder.Build(infos);
+        }
+
+        // ------------------------------------------------------------------ contenu
+
+        private void ReadCellContent(ComCell source, CellModel cell, bool formattingFromXml)
+        {
+            // La plage d'une cellule se termine par la marque de fin de cellule (1 position) : on l'exclut.
+            int contentEnd = source.End - 1;
+            if (contentEnd > source.Start)
+            {
+                cell.Runs.AddRange(CellTextSanitizer.Clean(_runReader.Read(source.Start, contentEnd)));
+            }
+
+            dynamic c = source.Cell;
+            cell.HorizontalAlignment = ReadHorizontalAlignment(c);
+
+            if (!formattingFromXml) ReadCellFormattingFromCom(c, cell);
+        }
+
+        private void ReadPlainText(ComCell source, CellModel cell)
+        {
+            cell.Runs.Clear();
+            try
+            {
+                string text = WordCom.AsString(((dynamic)source.Cell).Range.Text);
+                cell.Runs.AddRange(CellTextSanitizer.Clean(new[] { new TextRun(text, new RunFormat(), null) }));
+            }
+            catch (Exception ex)
+            {
+                _log("Texte illisible : " + ex.Message);
+            }
+        }
+
+        private static HorizontalAlignment ReadHorizontalAlignment(dynamic cell)
+        {
+            int alignment;
+            try
+            {
+                dynamic range = cell.Range;
+                alignment = WordCom.AsInt(range.ParagraphFormat.Alignment);
+                if (WordCom.IsUndefined(alignment)) alignment = WordCom.AsInt(range.Paragraphs.Item(1).Alignment);
+            }
+            catch (Exception)
+            {
+                return HorizontalAlignment.General;
+            }
+            return MapAlignment(alignment);
+        }
+
+        /// <summary>WdParagraphAlignment → alignement Excel.</summary>
+        public static HorizontalAlignment MapAlignment(int wdAlignment)
+        {
+            switch (wdAlignment)
+            {
+                case 0: return HorizontalAlignment.Left;
+                case 1: return HorizontalAlignment.Center;
+                case 2: return HorizontalAlignment.Right;
+                case 3:
+                case 5:
+                case 7:
+                case 8:
+                case 9: return HorizontalAlignment.Justify;
+                case 4: return HorizontalAlignment.Distributed;
+                default: return HorizontalAlignment.General;
+            }
+        }
+
+        /// <summary>Mode de repli : fond, bordures, alignement vertical et orientation lus via COM.</summary>
+        private void ReadCellFormattingFromCom(dynamic c, CellModel cell)
+        {
+            try
+            {
+                dynamic shading = c.Shading;
+                Rgb? fill = WordColor.Decode(WordCom.AsInt(shading.BackgroundPatternColor), _themeLookup);
+                if (!fill.HasValue && WordCom.AsInt(shading.Texture) == 1000) // wdTextureSolid
+                {
+                    fill = WordColor.Decode(WordCom.AsInt(shading.ForegroundPatternColor), _themeLookup);
+                }
+                cell.Fill = fill;
+            }
+            catch (Exception ex)
+            {
+                _log("Fond de cellule illisible : " + ex.Message);
+            }
+
+            try
+            {
+                int v = WordCom.AsInt(c.VerticalAlignment);
+                cell.VerticalAlignment = v == 1 ? VerticalAlignment.Center : v == 3 ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+            }
+            catch (Exception)
+            {
+                cell.VerticalAlignment = VerticalAlignment.Top;
+            }
+
+            try
+            {
+                int orientation = WordCom.AsInt(c.Range.Orientation);
+                cell.TextRotation = orientation == 2 ? 90 : orientation == 3 ? 180 : 0;
+            }
+            catch (Exception)
+            {
+                cell.TextRotation = 0;
+            }
+
+            try
+            {
+                dynamic borders = c.Borders;
+                cell.Borders = new CellBorders
+                {
+                    Top = ReadComBorder(borders.Item(-1)),
+                    Left = ReadComBorder(borders.Item(-2)),
+                    Bottom = ReadComBorder(borders.Item(-3)),
+                    Right = ReadComBorder(borders.Item(-4))
+                };
+            }
+            catch (Exception ex)
+            {
+                _log("Bordures illisibles : " + ex.Message);
+            }
+        }
+
+        private BorderLine ReadComBorder(dynamic border)
+        {
+            int style = WordCom.AsInt(border.LineStyle);
+            if (style == 0 || WordCom.IsUndefined(style)) return BorderLine.None;
+            int width = WordCom.AsInt(border.LineWidth); // WdLineWidth = huitièmes de point
+            if (WordCom.IsUndefined(width) || width <= 0) width = 4;
+            Rgb? color = WordColor.Decode(WordCom.AsInt(border.Color), _themeLookup);
+            return new BorderLine(OoxmlFormat.MapBorderStyle(ComLineStyleName(style), width), color);
+        }
+
+        private static string ComLineStyleName(int wdLineStyle)
+        {
+            switch (wdLineStyle)
+            {
+                case 2: return "dotted";
+                case 3:
+                case 4: return "dashed";
+                case 5: return "dotdash";
+                case 6: return "dotdotdash";
+                case 7: return "double";
+                case 8: return "triple";
+                case 18: return "dashdotstroked";
+                case 19:
+                case 20:
+                case 21:
+                case 22: return "threedemboss";
+                default:
+                    return wdLineStyle >= 9 && wdLineStyle <= 17 ? "thinthicksmallgap" : "single";
+            }
+        }
+
+        // ------------------------------------------------------------------ thème
+
+        /// <summary>Couleurs du thème du document (Word 2007+), mises en cache.</summary>
+        private Func<int, Rgb?> CreateThemeLookup(object document)
+        {
+            var cache = new Dictionary<int, Rgb?>();
+            dynamic doc = document;
+            return index =>
+            {
+                Rgb? color;
+                if (cache.TryGetValue(index, out color)) return color;
+                try
+                {
+                    int rgb = WordCom.AsInt(doc.DocumentTheme.ThemeColorScheme.Colors(index).RGB);
+                    color = WordColor.IsPlainRgb(rgb) ? Rgb.FromBgr(rgb) : (Rgb?)null;
+                }
+                catch (Exception)
+                {
+                    color = null;
+                }
+                cache[index] = color;
+                return color;
+            };
+        }
+    }
+}
