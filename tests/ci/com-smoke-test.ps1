@@ -2,9 +2,8 @@
     Test de fumée exécuté par l'intégration continue (Windows, sans Word).
 
     1. install.ps1 (enregistrement par utilisateur, HKCU) puis activation COM du complément et lecture
-       du ruban depuis un processus NON élevé, 64 et 32 bits — comme Word. Les processus élevés (l'agent
-       CI est administrateur) ignorent les enregistrements COM de HKCU : on lance donc l'activation via
-       « runas /trustlevel » (utilisateur standard).
+       du ruban par un client COM natif (cscript, comme Word), 64 et 32 bits, depuis un processus
+       NON élevé lancé via « runas /trustlevel » (l'agent CI est administrateur).
     2. uninstall.ps1 et vérification du nettoyage.
     3. Enregistrement machine (regasm /codebase, HKLM) et activation depuis un processus élevé, 64 et 32 bits.
 #>
@@ -12,24 +11,25 @@ param([Parameter(Mandatory = $true)][string]$Dist)
 
 $ErrorActionPreference = 'Stop'
 $dist = (Resolve-Path $Dist).Path
-$activate = Join-Path $PSScriptRoot 'activate.ps1'
-$hosts = @("$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe", "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe")
+$activate = Join-Path $PSScriptRoot 'activate.vbs'
+$hosts = @("$env:WINDIR\System32\cscript.exe", "$env:WINDIR\SysWOW64\cscript.exe")
 
-function Invoke-Activation([string]$ps, [bool]$restricted) {
+function Invoke-Activation([string]$cscript, [bool]$restricted) {
     $out = Join-Path $env:TEMP ('activation-' + [Guid]::NewGuid().ToString('N') + '.txt')
-    $command = "$ps -NoProfile -ExecutionPolicy Bypass -File $activate -OutFile $out"
     if ($restricted) {
-        & runas.exe /trustlevel:0x20000 $command | Out-Null
+        & runas.exe /trustlevel:0x20000 "$cscript //nologo $activate $out" | Out-Null
         for ($i = 0; $i -lt 120 -and -not (Test-Path $out); $i++) { Start-Sleep -Milliseconds 500 }
         if (-not (Test-Path $out)) { return $null }
         Start-Sleep -Milliseconds 300
     } else {
-        & $ps -NoProfile -ExecutionPolicy Bypass -File $activate -OutFile $out
+        & $cscript //nologo $activate $out | Out-Host
     }
     $result = [IO.File]::ReadAllText($out)
     Remove-Item $out -ErrorAction SilentlyContinue
     return $result
 }
+
+$failures = @()
 
 # --- 1. Installation par utilisateur (HKCU), activation non élevée.
 $installDir = Join-Path $env:LOCALAPPDATA 'WordTableToExcel'
@@ -48,7 +48,7 @@ foreach ($ps in $hosts) {
         continue
     }
     Write-Host "HKCU, $ps -> $result"
-    if ($result -notlike 'OK*') { throw "Activation COM (installation par utilisateur) en échec : $result" }
+    if ($result -notlike 'OK*') { $failures += "HKCU $ps : $result" }
 }
 
 # --- 2. Désinstallation.
@@ -70,8 +70,8 @@ $dll = Join-Path $env:TEMP 'wtte-regasm\WordTableToExcel.dll'
 New-Item -ItemType Directory -Force (Split-Path $dll) | Out-Null
 Copy-Item (Join-Path $dist 'WordTableToExcel.dll') $dll -Force
 $regasms = @{
-    "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe";
-    "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
+    "$env:WINDIR\System32\cscript.exe" = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe";
+    "$env:WINDIR\SysWOW64\cscript.exe" = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
 }
 foreach ($ps in $hosts) {
     if (-not (Test-Path $ps)) { continue }
@@ -81,11 +81,12 @@ foreach ($ps in $hosts) {
     try {
         $result = Invoke-Activation $ps $false
         Write-Host "HKLM, $ps -> $result"
-        if ($result -notlike 'OK*') { throw "Activation COM (regasm) en échec : $result" }
+        if ($result -notlike 'OK*') { $failures += "HKLM $ps : $result" }
     } finally {
         & $regasm /unregister /nologo $dll | Out-Host
     }
 }
 Remove-Item 'HKCU:\Software\Microsoft\Office\Word\Addins\WordTableToExcel.Connect' -ErrorAction SilentlyContinue
 
+if ($failures.Count -gt 0) { throw ("Activation COM en échec :`n" + ($failures -join "`n")) }
 Write-Host 'Test de fumée réussi.'
