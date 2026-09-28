@@ -6,7 +6,23 @@ on:
   workflow_dispatch:
 
 jobs:
+  shim:
+    name: Chargeur natif (MinGW-w64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilateurs MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-i686 gcc-mingw-w64-x86-64
+      - name: Compilation 32 et 64 bits
+        run: build/build-shim.sh shim-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shim
+          path: shim-out
+
   build:
+    name: Tests, compilation et installation (Windows)
+    needs: shim
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,19 +37,29 @@ jobs:
       - name: Compilation du complément (.NET Framework 4.0, AnyCPU)
         run: dotnet build src/WordTableToExcel -c Release
 
-      - name: Paquet d'installation
+      # Le dossier Installation/ du dépôt est ce que l'utilisateur obtient en extrayant le .zip de GitHub.
+      - name: Installation depuis le dossier Installation/ du dépôt (sans droits administrateur)
+        shell: powershell
+        run: ./tests/ci/com-smoke-test.ps1 -Folder Installation
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shim
+          path: shim-out
+
+      - name: Dossier d'installation reconstruit à partir des sources
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist/WordTableToExcel | Out-Null
-          Copy-Item src/WordTableToExcel/bin/Release/net40/WordTableToExcel.dll dist/WordTableToExcel/
-          Copy-Item scripts/* dist/WordTableToExcel/
-          Copy-Item README.md dist/WordTableToExcel/LISEZMOI.md
+          New-Item -ItemType Directory -Force dist/Installation | Out-Null
+          Copy-Item Installation/*.cmd, Installation/LISEZMOI.txt dist/Installation/
+          Copy-Item src/WordTableToExcel/bin/Release/net40/WordTableToExcel.dll dist/Installation/
+          Copy-Item shim-out/*.dll dist/Installation/
 
-      - name: Test d'installation et d'activation COM (32 et 64 bits)
+      - name: Installation depuis le dossier reconstruit
         shell: powershell
-        run: ./tests/ci/com-smoke-test.ps1 -Dist dist/WordTableToExcel
+        run: ./tests/ci/com-smoke-test.ps1 -Folder dist/Installation
 
       - uses: actions/upload-artifact@v4
         with:
-          name: WordTableToExcel
-          path: dist/WordTableToExcel
+          name: Installation
+          path: dist/Installation

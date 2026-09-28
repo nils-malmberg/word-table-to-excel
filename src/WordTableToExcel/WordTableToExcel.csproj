@@ -22,6 +22,9 @@
     <Description>Complément COM Word : exporte les tableaux du document vers un classeur Excel en conservant la mise en forme.</Description>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
+    <!-- Nom fort : recommandé pour « regasm /codebase » et évite tout conflit avec une autre DLL du même nom. -->
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>WordTableToExcel.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>

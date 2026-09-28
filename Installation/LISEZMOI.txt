@@ -1,0 +1,32 @@
+﻿TABLEAUX WORD VERS EXCEL - complément pour Microsoft Word (Windows)
+=====================================================================
+
+Aucune compilation, aucun droit administrateur : tout ce qu'il faut est dans ce dossier.
+
+INSTALLER
+  1. Fermez Word.
+  2. Double-cliquez sur « install.cmd ».
+     (Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur
+      « Informations complémentaires » puis « Exécuter quand même ».)
+  3. Ouvrez Word : le bouton « Tableaux vers Excel » se trouve à droite des
+     onglets Accueil et Références (Word 2000-2003 : barre d'outils Standard).
+
+UTILISER
+  Cliquez sur « Tableaux vers Excel », choisissez :
+    A - uniquement les tableaux qui ont une légende (« Tableau 1 : ... », champ SEQ) ;
+    B - tous les tableaux (ceux sans légende deviennent Tableau_1, Tableau_2...).
+  Puis choisissez où enregistrer le fichier Excel. Une feuille est créée par tableau,
+  avec sa mise en forme. Le document Word n'est jamais modifié.
+
+DÉSINSTALLER
+  Fermez Word, puis double-cliquez sur « uninstall.cmd ».
+
+CONTENU DU DOSSIER
+  WordTableToExcel.dll          le complément (.NET Framework 4)
+  WordTableToExcel.Shim32.dll   chargeur pour Office 32 bits
+  WordTableToExcel.Shim64.dll   chargeur pour Office 64 bits
+  install.cmd / uninstall.cmd   installation / désinstallation (utilisateur courant)
+
+Les fichiers sont copiés dans %LOCALAPPDATA%\WordTableToExcel.
+En cas de problème : %LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log
+Documentation complète : README.md à la racine du dépôt.

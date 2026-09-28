@@ -8,6 +8,12 @@ le document Word.
   ou texte commençant par « Tabl… »). Chaque feuille porte le nom de sa légende.
 - **Option B** : tous les tableaux du document. Les tableaux sans légende deviennent `Tableau_1`, `Tableau_2`…
 
+> **Installation en 3 clics — sans droits administrateur, sans rien compiler**
+>
+> 1. Sur la page GitHub du projet : **Code › Download ZIP**, puis clic droit sur le fichier › **Extraire tout**.
+> 2. Fermez Word, ouvrez le dossier **`Installation`** extrait et double-cliquez sur **`install.cmd`**.
+> 3. Ouvrez Word : bouton **Tableaux vers Excel** à droite des onglets **Accueil** et **Références**.
+
 ---
 
 ## Sommaire
@@ -32,7 +38,8 @@ le document Word.
 |---|---|
 | Word 2007, 2010, 2013, 2016, 2019, 2021, 2024, Microsoft 365 | Bouton **Tableaux vers Excel** dans les onglets **Accueil** et **Références** du ruban |
 | Word 2000, 2002 (XP), 2003 | Bouton **Tableaux → Excel** dans la barre d'outils *Standard* |
-| Office 32 bits et 64 bits, installation MSI ou « Démarrer en un clic » | Oui (même DLL, enregistrée dans les deux vues du registre) |
+| Office 32 bits et 64 bits, installation MSI ou « Démarrer en un clic » | Oui (chargeur 32 bits et 64 bits enregistrés tous les deux) |
+| Droits nécessaires | **Aucun droit administrateur** : installation pour l'utilisateur courant |
 | Windows | 7 SP1 et suivants, avec .NET Framework 4.x (inclus d'office depuis Windows 8) |
 | Excel | **Non requis** pour créer le fichier : le classeur `.xlsx` est écrit directement |
 
@@ -41,22 +48,38 @@ tout l'accès à Word se fait en liaison tardive, ce qui le rend indépendant de
 
 ## Installation
 
-Aucun droit administrateur n'est nécessaire : l'installation se fait pour l'utilisateur courant.
+Tout ce qu'il faut est **déjà dans le dépôt**, dossier [`Installation/`](Installation) : aucune
+compilation, aucun outil de développement, **aucun droit administrateur**.
 
-1. Récupérez le dossier `WordTableToExcel` :
-   - soit l'artefact **WordTableToExcel** produit par l'intégration continue GitHub (onglet *Actions*) ;
-   - soit en compilant vous-même (voir [Compilation](#compilation-et-tests)) : le dossier est créé dans `dist\`.
-2. **Fermez Word.**
-3. Double-cliquez sur **`install.cmd`**.
-4. Ouvrez Word : le bouton **Tableaux vers Excel** apparaît à droite de l'onglet **Accueil** (et de l'onglet **Références**).
+1. Sur la page GitHub du projet, cliquez sur **Code › Download ZIP**.
+2. Clic droit sur le fichier `.zip` téléchargé › **Extraire tout…** (n'exécutez pas l'installation depuis
+   l'intérieur du `.zip` : les fichiers doivent être extraits).
+3. **Fermez Word.**
+4. Ouvrez le dossier **`Installation`** et double-cliquez sur **`install.cmd`**.
+   Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur *Informations complémentaires*
+   puis *Exécuter quand même* (le script est un simple fichier texte que vous pouvez lire avant).
+5. Ouvrez Word : le bouton **Tableaux vers Excel** apparaît à droite de l'onglet **Accueil** (et de l'onglet
+   **Références**).
 
-Le script copie `WordTableToExcel.dll` dans `%LOCALAPPDATA%\WordTableToExcel`, l'enregistre comme
-composant COM pour l'utilisateur (`HKCU`) et le déclare auprès de Word.
+Contenu du dossier `Installation` :
 
-> Installation pour tous les utilisateurs d'un poste (administrateur) : exécutez
-> `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\regasm.exe /codebase WordTableToExcel.dll`
-> (Office 64 bits) ou `%WINDIR%\Microsoft.NET\Framework\v4.0.30319\regasm.exe /codebase WordTableToExcel.dll`
-> (Office 32 bits) depuis une invite de commandes administrateur.
+| Fichier | Rôle |
+|---|---|
+| `WordTableToExcel.dll` | Le complément (.NET Framework 4) |
+| `WordTableToExcel.Shim32.dll` | Chargeur natif pour Office 32 bits |
+| `WordTableToExcel.Shim64.dll` | Chargeur natif pour Office 64 bits |
+| `install.cmd`, `uninstall.cmd` | Installation / désinstallation pour l'utilisateur courant |
+| `LISEZMOI.txt` | Mode d'emploi résumé |
+
+`install.cmd` (un script `cmd` lisible, sans PowerShell) copie les trois DLL dans
+`%LOCALAPPDATA%\WordTableToExcel`, retire la marque « fichier provenant d'Internet », enregistre le
+complément pour l'utilisateur courant (`HKEY_CURRENT_USER`, Office 32 et 64 bits) et le déclare auprès de Word.
+
+> **Pourquoi un chargeur natif ?** Windows refuse d'activer un composant COM écrit en .NET lorsqu'il est
+> enregistré pour un seul utilisateur (vérifié dans l'intégration continue). Le petit chargeur
+> `WordTableToExcel.Shim32/64.dll` (code C, dossier `src/WordTableToExcel.Shim`), lui, s'enregistre
+> sans droits administrateur ; au chargement par Word il démarre .NET Framework 4 et crée le complément
+> contenu dans `WordTableToExcel.dll`.
 
 ## Utilisation
 
@@ -150,9 +173,9 @@ Le document ouvert est **uniquement lu** :
 
 ## Désinstallation
 
-Fermez Word, puis double-cliquez sur **`uninstall.cmd`** (dans le dossier d'installation ou le dossier
-`scripts` du projet). Les clés de registre, les fichiers et les préférences sont supprimés
-(`uninstall.ps1 -KeepSettings` conserve les préférences).
+Fermez Word, puis double-cliquez sur **`uninstall.cmd`** (dossier `Installation`). L'enregistrement COM,
+la déclaration auprès de Word, les fichiers de `%LOCALAPPDATA%\WordTableToExcel` et les préférences sont
+supprimés. Aucun droit administrateur n'est nécessaire.
 
 ## Dépannage
 
@@ -160,7 +183,8 @@ Fermez Word, puis double-cliquez sur **`uninstall.cmd`** (dans le dossier d'inst
 |---|---|
 | Le bouton n'apparaît pas | **Fichier › Options › Compléments**, liste *Gérer : Compléments COM* › **Atteindre…** : cochez « Tableaux Word vers Excel ». |
 | Le complément a été désactivé par Word | **Fichier › Options › Compléments**, *Gérer : Éléments désactivés* › **Atteindre…** : réactivez-le, puis redémarrez Word. |
-| « Comportement au chargement : non chargé. Une erreur d'exécution s'est produite » | Vérifiez que .NET Framework 4.x est installé ; relancez `install.cmd` (il débloque la DLL téléchargée). |
+| « Comportement au chargement : non chargé. Une erreur d'exécution s'est produite » | Vérifiez que .NET Framework 4.x est installé (inclus dans Windows 8, 10, 11) ; relancez `install.cmd`, qui recopie et débloque les fichiers. Le journal indique l'étape en cause. |
+| `install.cmd` signale un fichier manquant | Le `.zip` n'a pas été extrait : clic droit › *Extraire tout*, puis lancez `install.cmd` depuis le dossier extrait. |
 | Le classeur ne peut pas être enregistré | Le fichier est probablement ouvert dans Excel : fermez-le et recommencez. |
 | Un tableau n'est pas exporté ou apparaît simplifié | Le compte rendu final et le journal le signalent. |
 
@@ -168,19 +192,19 @@ Journal de diagnostic : `%LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log`.
 
 ## Compilation et tests
 
-Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download) (la DLL cible .NET Framework 4.0 grâce aux
-assemblys de référence NuGet ; Visual Studio 2019+ ou Rider peuvent aussi ouvrir `WordTableToExcel.sln`).
+**Les utilisateurs n'ont rien à compiler** : le dossier `Installation/` contient les fichiers prêts à
+l'emploi. Cette section concerne uniquement la maintenance du projet.
 
-```bat
-build.cmd
-```
-
-exécute les tests, compile `WordTableToExcel.dll` (AnyCPU) et prépare `dist\WordTableToExcel\`
-(DLL + scripts d'installation). Commandes équivalentes :
+- `build/build-installation.sh` (Linux, WSL ou Git Bash) : exécute les tests et régénère les trois DLL du
+  dossier `Installation/`. Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download) et MinGW-w64
+  (`apt install gcc-mingw-w64-i686 gcc-mingw-w64-x86-64`).
+- `build.cmd` (Windows) : exécute les tests et régénère `Installation\WordTableToExcel.dll` (le chargeur
+  natif ne change pas).
 
 ```bash
 dotnet test tests/WordTableToExcel.Tests      # 150+ tests, exécutables sous Windows, Linux ou macOS
-dotnet build src/WordTableToExcel -c Release
+dotnet build src/WordTableToExcel -c Release  # DLL .NET Framework 4.0, AnyCPU, signée par nom fort
+build/build-shim.sh sortie/                   # chargeurs natifs 32 et 64 bits
 ```
 
 Les tests couvrent l'analyse de la structure des tableaux (fichiers réels générés par
@@ -188,17 +212,24 @@ Les tests couvrent l'analyse de la structure des tableaux (fichiers réels gén�
 feuilles, la conversion des nombres, l'écriture du `.xlsx` et la lecture Word via un faux modèle
 objet Word (`tests/WordTableToExcel.Tests/Fakes`). Ils s'exécutent sans Word.
 
-L'intégration continue (`.github/workflows/build.yml`, Windows) exécute ces tests, compile la DLL, puis
-vérifie l'installation réelle : script `install.ps1`, activation COM du complément depuis un processus
-32 bits et 64 bits, chargement du ruban, désinstallation. Le fonctionnement dans Word lui-même
-(clic sur le bouton, lecture d'un vrai document) se valide sur un poste équipé de Word.
+L'intégration continue (`.github/workflows/build.yml`) compile le chargeur natif (Linux) et le complément
+(Windows), exécute les tests, puis vérifie l'installation réelle **deux fois** : avec le dossier
+`Installation/` du dépôt, tel que vous le téléchargez, et avec un dossier reconstruit à partir des sources.
+Chaque fois : fichiers marqués « provenant d'Internet », `install.cmd` sans droits administrateur, clés de
+registre, activation du complément et lecture du ruban par un client COM natif (comme Word) en 32 et
+64 bits depuis un compte utilisateur standard, puis `uninstall.cmd`. Le fonctionnement dans Word
+lui-même (clic sur le bouton, lecture d'un vrai document) se valide sur un poste équipé de Word ;
+`tests/fixtures/medium_shading_merged.docx` peut servir de document d'essai.
 
 ## Architecture
 
 ```
+Installation/         Fichiers prêts à l'emploi (DLL + install.cmd) : ce que l'utilisateur utilise
+src/WordTableToExcel.Shim/
+└── shim.c            Chargeur natif (C) : enregistré dans HKCU, démarre .NET 4 et crée le complément
 src/WordTableToExcel/
-├── AddIn/            Point d'entrée COM (IDTExtensibility2 + ruban), barre d'outils Word 2000-2003,
-│                     déclarations des interfaces Office (sans PIA), Ribbon.xml
+├── AddIn/            Point d'entrée COM (IDTExtensibility2 + ruban), entrée du chargeur natif,
+│                     barre d'outils Word 2000-2003, interfaces Office (sans PIA), Ribbon.xml
 ├── Export/           Déroulement de l'export (ExportService) et sélection A/B + noms de feuilles (ExportPlan)
 ├── UI/               Boîte de dialogue de choix, fenêtre de progression, messages
 ├── Word/             Lecture du document via le modèle objet (liaison tardive) :
