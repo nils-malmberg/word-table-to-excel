@@ -3,6 +3,11 @@
 *.bat text eol=crlf
 *.ps1 text eol=crlf
 *.vbs text eol=crlf
+*.txt text eol=crlf
 *.cs text
+*.c text
+*.sh text eol=lf
 *.xml text
 *.docx binary
+*.dll binary
+*.snk binary

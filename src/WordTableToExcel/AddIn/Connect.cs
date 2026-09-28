@@ -184,8 +184,9 @@ namespace WordTableToExcel.AddIn
         private const string AddInKeyPath = @"Software\Microsoft\Office\Word\Addins\" + ProgIdValue;
 
         /// <summary>
-        /// Appelé par « regasm /codebase » (droits administrateur) : déclare le complément auprès de Word pour
-        /// tous les utilisateurs. RegAsm 64 bits écrit dans la vue 64 bits du registre (Office 64 bits),
+        /// Déploiement facultatif par un administrateur (« regasm /codebase », pour tous les utilisateurs) ;
+        /// l'installation normale (Installation\install.cmd) passe par le chargeur natif et n'utilise pas
+        /// cette fonction. Déclare le complément auprès de Word pour tous les utilisateurs. RegAsm 64 bits écrit dans la vue 64 bits du registre (Office 64 bits),
         /// RegAsm 32 bits dans la vue WOW6432Node (Office 32 bits).
         /// </summary>
         [ComRegisterFunction]
