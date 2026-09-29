@@ -12,3 +12,6 @@
 *.dll binary
 *.snk binary
 *.xlsx binary
+*.exe binary
+*.ico binary
+*.png binary

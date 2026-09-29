@@ -24,6 +24,14 @@ namespace WordTableToExcel.Infrastructure
         public bool ImportGridlines;
         public string ImportLastFolder;
 
+        // Application autonome
+        /// <summary>Fenêtre toujours au premier plan (pratique pour cliquer dans Word puis dans l'application).</summary>
+        public bool AppTopMost = true;
+        /// <summary>Position et taille de la fenêtre : « x,y,largeur,hauteur » (pixels).</summary>
+        public string AppBounds;
+        /// <summary>Dossier du dernier fichier Word ajouté à la liste.</summary>
+        public string AppLastWordFolder;
+
         public static Settings Load()
         {
             var s = new Settings();
@@ -44,6 +52,9 @@ namespace WordTableToExcel.Infrastructure
                     s.ImportSkipHidden = ReadBool(key, "ImportSkipHidden", s.ImportSkipHidden);
                     s.ImportGridlines = ReadBool(key, "ImportGridlines", s.ImportGridlines);
                     s.ImportLastFolder = key.GetValue("ImportLastFolder") as string;
+                    s.AppTopMost = ReadBool(key, "AppTopMost", s.AppTopMost);
+                    s.AppBounds = key.GetValue("AppBounds") as string;
+                    s.AppLastWordFolder = key.GetValue("AppLastWordFolder") as string;
                 }
             }
             catch (Exception ex)
@@ -70,6 +81,9 @@ namespace WordTableToExcel.Infrastructure
                     key.SetValue("ImportSkipHidden", ImportSkipHidden ? 1 : 0, RegistryValueKind.DWord);
                     key.SetValue("ImportGridlines", ImportGridlines ? 1 : 0, RegistryValueKind.DWord);
                     if (!string.IsNullOrEmpty(ImportLastFolder)) key.SetValue("ImportLastFolder", ImportLastFolder);
+                    key.SetValue("AppTopMost", AppTopMost ? 1 : 0, RegistryValueKind.DWord);
+                    if (!string.IsNullOrEmpty(AppBounds)) key.SetValue("AppBounds", AppBounds);
+                    if (!string.IsNullOrEmpty(AppLastWordFolder)) key.SetValue("AppLastWordFolder", AppLastWordFolder);
                 }
             }
             catch (Exception ex)

@@ -19,6 +19,10 @@
     <Compile Include="..\..\src\WordTableToExcel\Word\**\*.cs" Link="Linked\Word\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\src\WordTableToExcel\Export\ExportPlan.cs" Link="Linked\Export\ExportPlan.cs" />
     <Compile Include="..\..\src\WordTableToExcel\Infrastructure\Log.cs" Link="Linked\Infrastructure\Log.cs" />
+    <!-- Application autonome : logique sans dépendance à Word ni à l'interface -->
+    <Compile Include="..\..\src\TableauxWordExcel\App\DocumentList.cs" Link="Linked\App\DocumentList.cs" />
+    <Compile Include="..\..\src\TableauxWordExcel\App\InsertionInfo.cs" Link="Linked\App\InsertionInfo.cs" />
+    <Compile Include="..\..\src\TableauxWordExcel\App\ComErrors.cs" Link="Linked\App\ComErrors.cs" />
   </ItemGroup>
 
   <ItemGroup>

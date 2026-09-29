@@ -35,6 +35,9 @@ SI LES BOUTONS N'APPARAISSENT PAS (PC PROFESSIONNEL)
       compléments d'application », puis redémarrez Word ;
     - cases grisées (règle de l'entreprise) : transmettez INFORMATIQUE.txt à
       votre service informatique, qui peut signer le complément.
+  Sans passer par le service informatique : utilisez plutôt l'application
+  TableauxWordExcel.exe (dossier Application), qui n'est pas un complément et
+  offre les mêmes fonctions.
 
 DÉSINSTALLER
   Fermez Word, puis double-cliquez sur « uninstall.cmd ».

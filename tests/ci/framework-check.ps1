@@ -10,7 +10,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Add-Type -Path (Resolve-Path $Dll).Path
+# DLL du complément ou exécutable de l'application autonome (même code).
+[void][Reflection.Assembly]::LoadFrom((Resolve-Path $Dll).Path)
 Write-Host ".NET Framework : $([Environment]::Version)"
 
 $failures = New-Object System.Collections.Generic.List[string]

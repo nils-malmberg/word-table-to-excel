@@ -52,6 +52,35 @@ jobs:
         shell: powershell
         run: ./tests/ci/enterprise-check.ps1 -Folder Installation
 
+      # Application autonome : un seul .exe qui pilote Word de l'extérieur (aucun complément chargé dans Word).
+      - name: Compilation de l'application autonome (TableauxWordExcel.exe)
+        run: dotnet build src/TableauxWordExcel -c Release
+
+      - name: Import Excel vérifié dans l'application (.NET Framework)
+        shell: powershell
+        run: ./tests/ci/framework-check.ps1 -Dll src/TableauxWordExcel/bin/Release/net40/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx
+
+      - name: Autotest et démarrage de l'application compilée
+        shell: powershell
+        run: ./tests/ci/app-selftest.ps1 -Exe src/TableauxWordExcel/bin/Release/net40/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx -Output app-selftest/compilee -PrintScreenshots
+
+      # Le dossier Application/ du dépôt contient l'exécutable que l'utilisateur télécharge.
+      - name: Autotest de l'exécutable du dépôt (Application/)
+        shell: powershell
+        run: ./tests/ci/app-selftest.ps1 -Exe Application/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx -Output app-selftest/depot
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Application
+          path: |
+            src/TableauxWordExcel/bin/Release/net40/TableauxWordExcel.exe
+            Application/LISEZMOI.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Captures-application
+          path: app-selftest
+
       - uses: actions/download-artifact@v4
         with:
           name: shim

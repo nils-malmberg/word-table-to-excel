@@ -1,7 +1,13 @@
 # Tableaux Word vers Excel
 
-Complément COM pour Microsoft Word (Windows) qui échange des tableaux entre Word et Excel,
-**une feuille par tableau**, en **conservant la mise en forme** :
+Échange des tableaux entre Microsoft Word et Excel (Windows), **une feuille par tableau**, en
+**conservant la mise en forme**. Deux façons de l'utiliser, avec exactement les mêmes fonctions :
+
+- l'**application** `TableauxWordExcel.exe` : un seul fichier à télécharger, rien à installer, qui pilote Word
+  de l'extérieur. **À privilégier sur un PC professionnel** : Word ne peut pas la bloquer comme un complément ;
+- le **complément Word** : des boutons dans le ruban de Word, pour les postes où Word accepte les compléments.
+
+Fonctions :
 
 - **Tableaux vers Excel** : exporte les tableaux du document ouvert vers un classeur Excel, sans jamais
   modifier le document Word.
@@ -12,31 +18,73 @@ Complément COM pour Microsoft Word (Windows) qui échange des tableaux entre Wo
   classeur Excel, avec les **valeurs exactement telles qu'Excel les affiche** (nombres, monnaies, dates,
   pourcentages…) et leur mise en forme, et, en option, une **légende numérotée « Tableau N » à compléter**.
 
-> **Installation en 3 clics — sans droits administrateur, sans rien compiler**
+> **Application — un seul fichier, aucune installation, aucun droit administrateur**
 >
-> 1. Sur la page GitHub du projet : **Code › Download ZIP**, puis clic droit sur le fichier › **Extraire tout**.
-> 2. Fermez Word, ouvrez le dossier **`Installation`** extrait et double-cliquez sur **`install.cmd`**.
-> 3. Ouvrez Word : boutons **Tableaux vers Excel** et **Importer depuis Excel** à droite des onglets
->    **Accueil** et **Références** (groupe **Excel**).
+> 1. Téléchargez [`Application/TableauxWordExcel.exe`](Application/TableauxWordExcel.exe) (bouton
+>    **Download raw file** de la page GitHub), par exemple dans *Documents*.
+> 2. Double-cliquez dessus. Au premier lancement, si Windows affiche « Windows a protégé votre ordinateur » :
+>    **Informations complémentaires › Exécuter quand même**.
+> 3. Exportez un document ouvert dans Word (ou un fichier), ou cliquez dans Word puis importez un classeur.
+>
+> **Complément Word** (si votre Word accepte les compléments) : **Code › Download ZIP**, extraire, fermer Word,
+> double-cliquer sur **`Installation/install.cmd`** ; les boutons **Tableaux vers Excel** et **Importer depuis
+> Excel** apparaissent à droite des onglets **Accueil** et **Références**.
 
 ---
 
 ## Sommaire
 
-1. [Compatibilité](#compatibilité)
-2. [Installation](#installation)
-3. [Utilisation](#utilisation)
-4. [Détection des légendes](#détection-des-légendes)
-5. [Mise en forme conservée](#mise-en-forme-conservée)
-6. [Intégrité du document Word](#intégrité-du-document-word)
-7. [Import depuis Excel](#import-depuis-excel)
-8. [Désinstallation](#désinstallation)
-9. [Dépannage](#dépannage)
-10. [Compilation et tests](#compilation-et-tests)
-11. [Architecture](#architecture)
-12. [Réglages avancés](#réglages-avancés)
+1. [Application autonome (TableauxWordExcel.exe)](#application-autonome-tableauxwordexcelexe)
+2. [Compatibilité](#compatibilité)
+3. [Installation du complément](#installation)
+4. [Utilisation du complément](#utilisation)
+5. [Détection des légendes](#détection-des-légendes)
+6. [Mise en forme conservée](#mise-en-forme-conservée)
+7. [Intégrité du document Word](#intégrité-du-document-word)
+8. [Import depuis Excel](#import-depuis-excel)
+9. [Désinstallation](#désinstallation)
+10. [Dépannage](#dépannage)
+11. [Compilation et tests](#compilation-et-tests)
+12. [Architecture](#architecture)
+13. [Réglages avancés](#réglages-avancés)
 
 ---
+
+## Application autonome (TableauxWordExcel.exe)
+
+Un seul fichier, [`Application/TableauxWordExcel.exe`](Application/TableauxWordExcel.exe) (environ 450 Ko) :
+pas d'installation, pas de droits administrateur, rien d'ajouté à Word. L'application dialogue avec Word
+comme le ferait un script (automatisation) ; aucune extension n'est chargée dans Word, donc les règles de Word
+sur les compléments (signature exigée, compléments désactivés) ne s'appliquent pas. Mode d'emploi court :
+[`Application/LISEZMOI.txt`](Application/LISEZMOI.txt).
+
+**Premier lancement.** Un programme téléchargé et non signé déclenche l'avertissement SmartScreen
+(« Windows a protégé votre ordinateur ») : **Informations complémentaires › Exécuter quand même**. Le navigateur
+peut aussi demander de confirmer le téléchargement (**Conserver**). Si l'antivirus ou une règle de
+l'entreprise bloque le programme (AppLocker, liste d'applications autorisées…), ce blocage est volontaire :
+il ne faut pas le contourner, mais demander au service informatique.
+
+**La fenêtre** (petite, en bas à droite de l'écran ; « Toujours visible » la garde au-dessus de Word) :
+
+- **Word → Excel.** La liste montre les documents ouverts dans Word (le document actif en gras, le nombre de
+  tableaux de chacun) et les fichiers ajoutés avec **Ajouter un fichier Word…** ou par glisser-déposer.
+  Sélectionnez-en un, puis **Exporter vers Excel…** : même choix A/B, mêmes options et même classeur qu'avec
+  le complément. Un document ouvert est exporté tel qu'il est à l'écran (modifications non enregistrées
+  comprises). Un fichier non ouvert est lu par une instance de Word **distincte et invisible**, en lecture seule,
+  macros désactivées, puis Word est refermé : vos documents ouverts ne sont pas touchés.
+- **Excel → Word.** Cliquez dans Word à l'endroit voulu, revenez dans l'application : l'encadré indique où les
+  tableaux seront insérés (document, page, « juste après le paragraphe « … » », dans un tableau, dans un en-tête…).
+  **Importer depuis Excel…** (ou déposez un classeur sur la fenêtre) ouvre la même boîte de dialogue que le
+  complément ; l'insertion s'annule en une fois par **Ctrl+Z** dans Word, qui revient au premier plan à la fin.
+
+La liste et l'encadré s'actualisent chaque fois que vous revenez dans la fenêtre (et avec **F5**). Plusieurs
+fenêtres ou instances de Word, documents en mode protégé (export seulement), OneDrive/SharePoint et
+documents jamais enregistrés sont pris en charge. Si Word est occupé par une boîte de dialogue, l'application
+patiente quelques secondes puis le signale clairement au lieu de rester bloquée.
+
+L'application ne modifie rien sur le PC en dehors de ses préférences (`HKCU\Software\WordTableToExcel`, les
+mêmes que le complément) et de son journal (`%LOCALAPPDATA%\WordTableToExcel`). Pour la supprimer : effacer
+le fichier `.exe`.
 
 ## Compatibilité
 
@@ -51,6 +99,9 @@ Complément COM pour Microsoft Word (Windows) qui échange des tableaux entre Wo
 
 Le complément n'utilise aucune bibliothèque d'interopérabilité liée à une version d'Office (PIA) :
 tout l'accès à Word se fait en liaison tardive, ce qui le rend indépendant de la version installée.
+
+L'application autonome a les mêmes prérequis (Windows 7 SP1 et suivants, .NET Framework 4.x, Word 2007 ou
+plus récent, 32 ou 64 bits) et ne demande, elle non plus, aucun droit administrateur.
 
 ## Installation
 
@@ -284,6 +335,11 @@ supprimés. Aucun droit administrateur n'est nécessaire.
 | Import : cellules de formules vides | Le classeur n'a jamais été calculé par Excel : ouvrez-le dans Excel, enregistrez-le, puis recommencez. |
 | Import : tableau trop large | Décochez « Réduire les tableaux trop larges », passez la section en orientation *Paysage* ou indiquez une plage plus étroite. |
 | Import : annuler | **Ctrl+Z** retire en une fois tous les tableaux et légendes insérés. |
+| Application : « Windows a protégé votre ordinateur » | Avertissement normal pour un programme téléchargé non signé : **Informations complémentaires › Exécuter quand même**. |
+| Application : bloquée par l'antivirus ou une règle de l'entreprise | Ne pas contourner : demander au service informatique d'autoriser `TableauxWordExcel.exe`. |
+| Application : « Word est occupé » | Une boîte de dialogue est ouverte dans Word (enregistrement, impression, mot de passe…) : fermez-la et recommencez. |
+| Application : le document n'apparaît pas dans la liste | Revenez dans la fenêtre ou appuyez sur **F5**. Word et l'application doivent être lancés avec les mêmes droits (ne lancez pas l'une des deux « en tant qu'administrateur »). |
+| Application : import impossible (mode protégé, document final, document protégé) | L'encadré l'indique : **Activer la modification**, **Modifier quand même** ou retirer la protection dans Word. |
 
 Journal de diagnostic : `%LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log`.
 
@@ -308,6 +364,9 @@ détecte cette situation et affiche la marche à suivre :
 L'intégration continue vérifie que les DLL signées s'installent et s'activent comme les autres, et que
 `install.cmd` signale bien ces règles.
 
+**Sans passer par le service informatique** : utilisez l'[application autonome](#application-autonome-tableauxwordexcelexe),
+qui n'est pas un complément et n'est donc pas concernée par ces règles.
+
 ## Compilation et tests
 
 **Les utilisateurs n'ont rien à compiler** : le dossier `Installation/` contient les fichiers prêts à
@@ -320,10 +379,15 @@ l'emploi. Cette section concerne uniquement la maintenance du projet.
   natif ne change pas).
 
 ```bash
-dotnet test tests/WordTableToExcel.Tests      # 280+ tests, exécutables sous Windows, Linux ou macOS
-dotnet build src/WordTableToExcel -c Release  # DLL .NET Framework 4.0, AnyCPU, signée par nom fort
-build/build-shim.sh sortie/                   # chargeurs natifs 32 et 64 bits
+dotnet test tests/WordTableToExcel.Tests       # 300+ tests, exécutables sous Windows, Linux ou macOS
+dotnet build src/WordTableToExcel -c Release   # DLL .NET Framework 4.0, AnyCPU, signée par nom fort
+dotnet build src/TableauxWordExcel -c Release  # application TableauxWordExcel.exe (.NET Framework 4.0, AnyCPU)
+build/build-shim.sh sortie/                    # chargeurs natifs 32 et 64 bits
+python3 build/make-icon.py                     # icône de l'application (Pillow)
 ```
+
+L'application compile les mêmes sources que le complément (sauf `AddIn/`) dans un exécutable unique ; après
+une modification, recopier `src/TableauxWordExcel/bin/Release/net40/TableauxWordExcel.exe` dans `Application/`.
 
 Les tests couvrent l'analyse de la structure des tableaux (fichiers réels générés par
 `tests/fixtures/make_fixtures.py`), les styles de tableau, la détection des légendes, les noms de
@@ -339,6 +403,13 @@ de tableaux, et choix du point d'insertion avec un faux Word. L'intégration con
 l'import avec la DLL .NET Framework 4 dans Windows PowerShell (`tests/ci/framework-check.ps1`), c'est-à-dire
 dans le même environnement d'exécution que Word.
 
+Pour l'application : tests de la liste des documents, du texte décrivant le point d'insertion et des erreurs de
+communication avec Word ; sous Windows, `tests/ci/app-selftest.ps1` vérifie l'exécutable (fichier unique AnyCPU,
+manifeste sans élévation, icône), lance son autotest (`TableauxWordExcel.exe --selftest <dossier> <classeur>` :
+filtre de messages OLE, recherche de Word, construction des fenêtres avec captures PNG, lecture du classeur de
+test), puis le démarre réellement sans Word, vérifie l'instance unique et la fermeture. Le dialogue avec un vrai
+Word se valide sur un poste équipé de Word.
+
 L'intégration continue (`.github/workflows/build.yml`) compile le chargeur natif (Linux) et le complément
 (Windows), exécute les tests, puis vérifie l'installation réelle **deux fois** : avec le dossier
 `Installation/` du dépôt, tel que vous le téléchargez, et avec un dossier reconstruit à partir des sources.
@@ -351,7 +422,12 @@ lui-même (clic sur le bouton, lecture d'un vrai document) se valide sur un post
 ## Architecture
 
 ```
-Installation/         Fichiers prêts à l'emploi (DLL + install.cmd) : ce que l'utilisateur utilise
+Application/          TableauxWordExcel.exe prêt à l'emploi + LISEZMOI.txt
+Installation/         Fichiers prêts à l'emploi du complément (DLL + install.cmd)
+src/TableauxWordExcel/
+├── Program.cs        Point d'entrée : instance unique, filtre de messages OLE, autotest (--selftest)
+└── App/              Fenêtre principale, accès aux instances de Word depuis un autre processus
+                      (fenêtres Word → modèle objet), document ouvert en arrière-plan, point d'insertion
 src/WordTableToExcel.Shim/
 └── shim.c            Chargeur natif (C) : enregistré dans HKCU, démarre .NET 4 et crée le complément
 src/WordTableToExcel/
@@ -407,3 +483,6 @@ Préférences stockées dans `HKEY_CURRENT_USER\Software\WordTableToExcel` :
 | `ImportSkipHidden` | DWORD | Import : ignorer les lignes et colonnes masquées (1) ou non (0) |
 | `ImportGridlines` | DWORD | Import : ajouter un quadrillage aux cellules sans bordure (1) ou non (0) |
 | `ImportLastFolder` | Chaîne | Import : dernier dossier ouvert |
+| `AppTopMost` | DWORD | Application : fenêtre toujours visible (1, par défaut) ou non (0) |
+| `AppBounds` | Chaîne | Application : position et taille de la fenêtre (`x,y,largeur,hauteur`) |
+| `AppLastWordFolder` | Chaîne | Application : dossier du dernier fichier Word ajouté |

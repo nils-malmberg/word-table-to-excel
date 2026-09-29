@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using WordTableToExcel.AddIn;
 using WordTableToExcel.Core.Captions;
 using WordTableToExcel.Core.ExcelImport;
 using WordTableToExcel.Core.Model;
@@ -48,30 +47,52 @@ namespace WordTableToExcel.Import
         private const int MsoLanguageIdUi = 2;
 
         private readonly dynamic _application;
+        private readonly IWin32Window _owner;
 
+        /// <summary>Import depuis le complément : les boîtes de dialogue appartiennent à la fenêtre de Word.</summary>
         public ImportService(object application)
+            : this(application, null)
         {
-            _application = application;
         }
 
-        public void Run()
+        /// <param name="application">Objet Word.Application.</param>
+        /// <param name="owner">Fenêtre propriétaire des boîtes de dialogue (application autonome) ; null : fenêtre de Word.</param>
+        public ImportService(object application, IWin32Window owner)
         {
-            IWin32Window owner = WindowOwner.FromWord((object)_application);
+            _application = application;
+            _owner = owner;
+        }
+
+        /// <summary>
+        /// Vrai si l'import est piloté depuis un autre programme (application autonome) : Word reste utilisable
+        /// pendant l'opération, son affichage n'est donc jamais figé.
+        /// </summary>
+        private bool Standalone
+        {
+            get { return _owner != null; }
+        }
+
+        /// <summary>Insère des tableaux au point d'insertion du document actif de Word.</summary>
+        /// <param name="sourcePath">Classeur à importer ; null : demandé à l'utilisateur.</param>
+        /// <returns>Vrai si au moins un tableau a été inséré.</returns>
+        public bool Run(string sourcePath = null)
+        {
+            IWin32Window owner = _owner ?? WindowOwner.FromWord((object)_application);
             object documentObject = GetEditableDocument(owner);
-            if (documentObject == null) return;
+            if (documentObject == null) return false;
 
             var settings = Settings.Load();
-            string path = AskSourcePath(owner, settings);
-            if (path == null) return;
+            string path = sourcePath ?? AskSourcePath(owner, settings);
+            if (path == null) return false;
             settings.ImportLastFolder = Path.GetDirectoryName(path);
             settings.Save();
 
             XlsxWorkbook workbook = LoadWorkbook(owner, path);
-            if (workbook == null) return;
+            if (workbook == null) return false;
 
             var culture = CultureInfo.CurrentCulture;
             var format = new ExcelFormatSettings(culture, OfficeLanguage(), workbook.Date1904, workbook.Styles.Colors);
-            int wordVersion = Connect.WordMajorVersion((object)_application);
+            int wordVersion = WordCom.WordMajorVersion((object)_application);
             var inserter = new WordTableInserter((object)_application, documentObject, wordVersion);
             var matcher = new CaptionMatcher(new List<string>(settings.ExtraLabels()) { inserter.CaptionLabel });
 
@@ -84,14 +105,14 @@ namespace WordTableToExcel.Import
             {
                 var details = string.Join("\n", candidates.Select(c => "• " + c.Info.Name + " : " + (c.Problem ?? "vide")).ToArray());
                 Messages.Info(owner, "Aucune feuille de ce classeur ne contient de tableau à importer.\n\n" + details);
-                return;
+                return false;
             }
 
             bool below = settings.ImportCaptionBelow ?? DocumentUsesCaptionsBelow(documentObject, matcher);
             ImportChoices choices;
             using (var dialog = new ImportDialog(Path.GetFileName(path), candidates, settings, below))
             {
-                if (dialog.ShowDialog(owner) != DialogResult.OK) return;
+                if (dialog.ShowDialog(owner) != DialogResult.OK) return false;
                 choices = dialog.Choices;
             }
             settings.ImportAddCaption = choices.AddCaption;
@@ -106,14 +127,14 @@ namespace WordTableToExcel.Import
             if (jobs.Count == 0)
             {
                 ShowReport(owner, report);
-                return;
+                return false;
             }
 
             long cells = jobs.Sum(j => (long)j.Table.RowCount * j.Table.ColumnCount);
             if (cells > 5000 && !Messages.Ask(owner, "L'import va créer " + WordTableInserter.Describe(jobs.Count) + " totalisant "
                 + cells.ToString("N0", CultureInfo.CurrentCulture) + " cellules : l'opération peut prendre du temps.\n\nContinuer ?"))
             {
-                return;
+                return false;
             }
 
             try
@@ -129,6 +150,7 @@ namespace WordTableToExcel.Import
                 }
             }
             ShowReport(owner, report);
+            return report.Inserted.Count > 0;
         }
 
         // ------------------------------------------------------------------ document
@@ -336,7 +358,7 @@ namespace WordTableToExcel.Import
             }
         }
 
-        private static List<ImportCandidate> Analyze(XlsxWorkbook workbook, ExcelFormatSettings format, CaptionMatcher matcher)
+        internal static List<ImportCandidate> Analyze(XlsxWorkbook workbook, ExcelFormatSettings format, CaptionMatcher matcher)
         {
             var converter = new SheetConverter(workbook, format, new ExcelImportOptions(), matcher);
             var result = new List<ImportCandidate>();
@@ -452,14 +474,19 @@ namespace WordTableToExcel.Import
                 {
                     // Word 2007 : pas d'enregistrement d'annulation groupé.
                 }
-                try
+                if (!Standalone)
                 {
-                    screenUpdating = WordCom.IsTrue(_application.ScreenUpdating);
-                    _application.ScreenUpdating = false;
-                }
-                catch (Exception)
-                {
-                    // Sans conséquence.
+                    // Dans Word uniquement : piloté depuis un autre programme, un affichage figé resterait figé
+                    // si ce programme était interrompu avant de le rétablir.
+                    try
+                    {
+                        screenUpdating = WordCom.IsTrue(_application.ScreenUpdating);
+                        _application.ScreenUpdating = false;
+                    }
+                    catch (Exception)
+                    {
+                        // Sans conséquence.
+                    }
                 }
 
                 for (int i = 0; i < jobs.Count; i++)
@@ -484,13 +511,16 @@ namespace WordTableToExcel.Import
             }
             finally
             {
-                try
+                if (!Standalone)
                 {
-                    _application.ScreenUpdating = screenUpdating;
-                }
-                catch (Exception)
-                {
-                    // Sans conséquence.
+                    try
+                    {
+                        _application.ScreenUpdating = screenUpdating;
+                    }
+                    catch (Exception)
+                    {
+                        // Sans conséquence.
+                    }
                 }
                 if (undoRecord)
                 {

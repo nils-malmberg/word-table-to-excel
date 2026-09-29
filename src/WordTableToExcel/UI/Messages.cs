@@ -6,7 +6,8 @@ namespace WordTableToExcel.UI
 {
     internal static class Messages
     {
-        public const string Title = "Tableaux Word vers Excel";
+        /// <summary>Titre des boîtes de message (l'application autonome utilise le sien).</summary>
+        public static string Title = "Tableaux Word vers Excel";
 
         public static void Info(IWin32Window owner, string text)
         {

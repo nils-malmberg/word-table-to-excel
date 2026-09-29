@@ -9,6 +9,7 @@ using WordTableToExcel.Export;
 using WordTableToExcel.Import;
 using WordTableToExcel.Infrastructure;
 using WordTableToExcel.UI;
+using WordTableToExcel.Word;
 
 namespace WordTableToExcel.AddIn
 {
@@ -45,7 +46,7 @@ namespace WordTableToExcel.AddIn
             try
             {
                 _application = Application;
-                Log.Info("Connexion à Word " + WordVersion(Application) + " (" + ConnectMode + "), .NET " + Environment.Version + ", " + (IntPtr.Size * 8) + " bits.");
+                Log.Info("Connexion à Word " + WordCom.WordVersion(Application) + " ("+ ConnectMode + "), .NET " + Environment.Version + ", " + (IntPtr.Size * 8) + " bits.");
                 if (ConnectMode != ext_ConnectMode.ext_cm_Startup) SetupLegacyToolbar();
             }
             catch (Exception ex)
@@ -185,28 +186,8 @@ namespace WordTableToExcel.AddIn
         private void SetupLegacyToolbar()
         {
             if (_legacyToolbar != null || _application == null) return;
-            if (WordMajorVersion(_application) >= 12) return; // le ruban est utilisé
+            if (WordCom.WordMajorVersion(_application) >= 12) return; // le ruban est utilisé
             _legacyToolbar = LegacyToolbar.Create(_application, RunExport, RunImport);
-        }
-
-        internal static string WordVersion(object application)
-        {
-            try
-            {
-                return Convert.ToString(((dynamic)application).Version);
-            }
-            catch (Exception)
-            {
-                return "?";
-            }
-        }
-
-        internal static int WordMajorVersion(object application)
-        {
-            string version = WordVersion(application);
-            int dot = version.IndexOf('.');
-            int major;
-            return int.TryParse(dot > 0 ? version.Substring(0, dot) : version, out major) ? major : 0;
         }
 
         // ------------------------------------------------------------------ Enregistrement (regasm)

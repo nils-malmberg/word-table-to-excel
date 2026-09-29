@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Application autonome « Tableaux Word ↔ Excel » : un seul fichier TableauxWordExcel.exe,
+    sans installation ni droits d'administrateur. Elle pilote Word de l'extérieur (automatisation),
+    rien n'est chargé dans Word : les règles de Word sur les compléments (signature, blocage des
+    compléments COM) ne s'appliquent pas.
+    Même code que le complément (export, import, boîtes de dialogue), compilé dans l'exécutable :
+    .NET Framework 4.0, présent sur tous les Windows récents.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net40</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>TableauxWordExcel</AssemblyName>
+    <RootNamespace>WordTableToExcel</RootNamespace>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <LangVersion>7.3</LangVersion>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>2.0.0</Version>
+    <AssemblyVersion>2.0.0.0</AssemblyVersion>
+    <FileVersion>2.0.0.0</FileVersion>
+    <Product>Tableaux Word ↔ Excel</Product>
+    <AssemblyTitle>Tableaux Word ↔ Excel</AssemblyTitle>
+    <Description>Exporte les tableaux de documents Word vers Excel et importe des tableaux Excel dans Word, en conservant la mise en forme.</Description>
+    <Deterministic>true</Deterministic>
+    <ApplicationIcon>TableauxWordExcel.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Pas de fichier .exe.config à côté de l'exécutable : un seul fichier à distribuer. -->
+    <GenerateSupportedRuntime>false</GenerateSupportedRuntime>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Code de l'application -->
+    <Compile Include="Program.cs" />
+    <Compile Include="App\**\*.cs" />
+    <!-- Code partagé avec le complément (tout sauf AddIn\, propre au chargement dans Word) -->
+    <Compile Include="..\WordTableToExcel\Core\**\*.cs" Link="Shared\Core\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\WordTableToExcel\Word\**\*.cs" Link="Shared\Word\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\WordTableToExcel\Export\**\*.cs" Link="Shared\Export\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\WordTableToExcel\Import\**\*.cs" Link="Shared\Import\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\WordTableToExcel\UI\**\*.cs" Link="Shared\UI\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\WordTableToExcel\Infrastructure\**\*.cs" Link="Shared\Infrastructure\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="TableauxWordExcel.ico" LogicalName="TableauxWordExcel.ico" />
+  </ItemGroup>
+
+</Project>

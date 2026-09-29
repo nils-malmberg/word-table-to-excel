@@ -29,6 +29,7 @@ namespace WordTableToExcel.Export
             _application = application;
         }
 
+        /// <summary>Export du document actif de Word (complément : bouton du ruban).</summary>
         public void Run()
         {
             IWin32Window owner = WindowOwner.FromWord((object)_application);
@@ -39,7 +40,14 @@ namespace WordTableToExcel.Export
                     + "(Si le document est en mode protégé, cliquez d'abord sur « Activer la modification ».)");
                 return;
             }
+            Run(owner, documentObject);
+        }
 
+        /// <summary>Export d'un document donné (application autonome : document choisi dans la liste).</summary>
+        /// <param name="owner">Fenêtre propriétaire des boîtes de dialogue.</param>
+        /// <param name="documentObject">Objet Word.Document, ouvert ou en mode protégé.</param>
+        public void Run(IWin32Window owner, object documentObject)
+        {
             dynamic document = documentObject;
             using (new WordDocumentGuard(documentObject))
             {
