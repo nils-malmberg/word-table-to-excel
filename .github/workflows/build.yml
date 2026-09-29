@@ -47,6 +47,12 @@ jobs:
         shell: powershell
         run: ./tests/ci/com-smoke-test.ps1 -Folder Installation
 
+      # Expérience : enregistrement .NET standard (mscoree.dll), comme l'extension Outlook RBLclass.
+      - name: Activation avec l'enregistrement .NET standard (mscoree.dll)
+        shell: powershell
+        continue-on-error: true
+        run: ./tests/ci/mscoree-check.ps1 -Folder Installation
+
       # Postes d'entreprise : DLL signées (certificat de test) et règles « compléments signés » de Word.
       - name: Signature des DLL et détection des règles de sécurité de Word
         shell: powershell
