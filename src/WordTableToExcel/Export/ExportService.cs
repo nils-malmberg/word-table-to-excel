@@ -29,6 +29,12 @@ namespace WordTableToExcel.Export
             _application = application;
         }
 
+        /// <summary>
+        /// Lire le contenu des tableaux dans leur XML plutôt que caractère par caractère (voir
+        /// <see cref="WordTableReader.ReadContentFromXml"/>) : indispensable quand Word est piloté depuis un autre programme.
+        /// </summary>
+        public bool ReadContentFromXml { get; set; }
+
         /// <summary>Export du document actif de Word (complément : bouton du ruban).</summary>
         public void Run()
         {
@@ -108,7 +114,8 @@ namespace WordTableToExcel.Export
                 var report = new ExportReport();
                 try
                 {
-                    ProgressDialog.Run(owner, "Export des tableaux vers Excel", progress => Export(documentObject, plan, options, path, progress, report));
+                    bool fromXml = ReadContentFromXml;
+                    ProgressDialog.Run(owner, "Export des tableaux vers Excel", progress => Export(documentObject, plan, options, path, fromXml, progress, report));
                 }
                 catch (ExportFailedException ex)
                 {
@@ -270,10 +277,11 @@ namespace WordTableToExcel.Export
 
         // ------------------------------------------------------------------ export
 
-        private static void Export(object documentObject, List<PlannedSheet> plan, XlsxExportOptions options, string path, IExportProgress progress, ExportReport report)
+        private static void Export(object documentObject, List<PlannedSheet> plan, XlsxExportOptions options, string path, bool contentFromXml,
+            IExportProgress progress, ExportReport report)
         {
             dynamic document = documentObject;
-            var reader = new WordTableReader(documentObject, Log.Info);
+            var reader = new WordTableReader(documentObject, Log.Info) { ReadContentFromXml = contentFromXml };
             var writer = new XlsxWorkbookWriter(options);
             var stopwatch = Stopwatch.StartNew();
 

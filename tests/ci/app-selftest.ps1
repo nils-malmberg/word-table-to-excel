@@ -39,7 +39,7 @@ Write-Host 'OK  manifeste et icône'
 $selftest = Start-Process -FilePath $exePath -ArgumentList @('--selftest', "`"$outPath`"", "`"$fixturePath`"") -Wait -PassThru
 Get-Content (Join-Path $outPath 'selftest.txt') -Encoding UTF8 | ForEach-Object { Write-Host $_ }
 if ($selftest.ExitCode -ne 0) { throw "Autotest en échec (code $($selftest.ExitCode))." }
-foreach ($png in 'fenetre.png', 'fenetre-sans-word.png', 'export.png', 'import.png') {
+foreach ($png in 'fenetre.png', 'fenetre-sans-word.png', 'export.png', 'import.png', 'import-tout.png') {
     $file = Join-Path $outPath $png
     if (-not (Test-Path $file)) { throw "Capture manquante : $png" }
     if ($PrintScreenshots) {

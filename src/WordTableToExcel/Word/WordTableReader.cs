@@ -11,7 +11,9 @@ namespace WordTableToExcel.Word
     /// Lit un tableau Word (objet COM Word.Table) et produit un <see cref="TableModel"/> :
     /// <list type="number">
     /// <item>structure exacte (grille, fusions, fonds, bordures, styles de tableau) depuis le XML du tableau ;</item>
-    /// <item>texte et mise en forme des caractères depuis le modèle objet (valeurs effectives calculées par Word) ;</item>
+    /// <item>texte et mise en forme des caractères depuis le modèle objet (valeurs effectives calculées par Word),
+    /// ou, avec <see cref="ReadContentFromXml"/>, depuis ce même XML (quelques appels à Word par tableau au lieu de
+    /// plusieurs dizaines par cellule), après vérification que son texte est identique à celui renvoyé par Word ;</item>
     /// <item>mode de repli COM complet si le XML n'est pas disponible (anciennes versions, document protégé).</item>
     /// </list>
     /// Toutes les opérations sont en lecture seule.
@@ -31,6 +33,15 @@ namespace WordTableToExcel.Word
         private readonly WordRunReader _runReader;
         private readonly Func<int, Rgb?> _themeLookup;
         private readonly Action<string> _log;
+        private readonly Dictionary<bool, string> _themeFonts = new Dictionary<bool, string>();
+
+        /// <summary>
+        /// Lit le texte et la mise en forme des caractères dans le XML du tableau plutôt que caractère par caractère
+        /// auprès de Word : beaucoup plus rapide quand Word est piloté depuis un autre programme. Le texte obtenu est
+        /// comparé à celui que renvoie Word ; s'il diffère (texte masqué, suppressions suivies…), le tableau est lu
+        /// cellule par cellule comme d'habitude.
+        /// </summary>
+        public bool ReadContentFromXml { get; set; }
 
         public WordTableReader(object document, Action<string> log)
         {
@@ -49,23 +60,27 @@ namespace WordTableToExcel.Word
             dynamic t = table;
             var model = new TableModel { DocumentIndex = documentIndex };
 
-            var comCells = EnumerateCells(t);
             TableLayout layout = TryReadXmlLayout(t, model);
+            bool xmlContent = ReadContentFromXml && layout != null && layout.HasContent && XmlTextMatchesWord(t, layout, documentIndex);
             Dictionary<LayoutCell, ComCell> pairs = null;
 
-            if (layout != null)
+            if (!xmlContent)
             {
-                pairs = Pair(layout, comCells, model);
-                if (pairs == null)
+                var comCells = EnumerateCells(t);
+                if (layout != null)
                 {
-                    model.Warnings.Add("structure XML incohérente avec Word, reconstruction à partir des largeurs de cellules");
-                    layout = null;
+                    pairs = Pair(layout, comCells, model);
+                    if (pairs == null)
+                    {
+                        model.Warnings.Add("structure XML incohérente avec Word, reconstruction à partir des largeurs de cellules");
+                        layout = null;
+                    }
                 }
-            }
-            if (layout == null)
-            {
-                layout = BuildLayoutFromWidths(comCells);
-                pairs = layout.Cells.Where(c => c.SourceTag is ComCell).ToDictionary(c => c, c => (ComCell)c.SourceTag);
+                if (layout == null)
+                {
+                    layout = BuildLayoutFromWidths(comCells);
+                    pairs = layout.Cells.Where(c => c.SourceTag is ComCell).ToDictionary(c => c, c => (ComCell)c.SourceTag);
+                }
             }
 
             model.RowCount = layout.RowCount;
@@ -90,7 +105,15 @@ namespace WordTableToExcel.Word
                 };
 
                 ComCell source;
-                if (pairs.TryGetValue(lc, out source))
+                if (xmlContent)
+                {
+                    if (lc.Content != null)
+                    {
+                        cell.Runs.AddRange(CellTextSanitizer.Clean(lc.Content.Runs));
+                        cell.HorizontalAlignment = MapAlignment(lc.Content.Alignment);
+                    }
+                }
+                else if (pairs.TryGetValue(lc, out source))
                 {
                     try
                     {
@@ -162,7 +185,7 @@ namespace WordTableToExcel.Word
         private TableLayout TryReadXmlLayout(dynamic table, TableModel model)
         {
             dynamic range = table.Range;
-            string xml = TryGetXml(() => range.WordOpenXML);          // Word 2010+
+            string xml = TryGetXml(() => range.WordOpenXML);          // Word 2007+
             if (xml == null) xml = TryGetXml(() => range.XML);        // Word 2003+ (WordprocessingML 2003)
             if (xml == null) xml = TryGetXml(() => range.XML(false)); // même propriété, appelée avec son paramètre facultatif
             if (xml == null)
@@ -172,7 +195,7 @@ namespace WordTableToExcel.Word
             }
             try
             {
-                var layout = WordXmlTableParser.Parse(xml);
+                var layout = WordXmlTableParser.Parse(xml, ThemeFont);
                 if (layout == null) _log("Tableau " + model.DocumentIndex + " : aucun tableau dans le XML.");
                 return layout;
             }
@@ -181,6 +204,46 @@ namespace WordTableToExcel.Word
                 _log("Tableau " + model.DocumentIndex + " : XML illisible (" + ex.Message + ").");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Le texte lu dans le XML est-il celui que Word renvoie pour le tableau ? (un seul appel à Word). En cas de
+        /// doute, le tableau est lu cellule par cellule : jamais de valeur différente de ce qu'affiche Word.
+        /// </summary>
+        private bool XmlTextMatchesWord(dynamic table, TableLayout layout, int documentIndex)
+        {
+            string wordText;
+            try
+            {
+                wordText = WordCom.AsString(table.Range.Text);
+            }
+            catch (Exception ex)
+            {
+                _log("Tableau " + documentIndex + " : texte indisponible (" + ex.Message + "), lecture cellule par cellule.");
+                return false;
+            }
+            if (string.Equals(CellTextSanitizer.Comparable(wordText), CellTextSanitizer.Comparable(layout.XmlText), StringComparison.Ordinal)) return true;
+            _log("Tableau " + documentIndex + " : texte du XML différent de celui de Word (texte masqué, révisions…), lecture cellule par cellule.");
+            return false;
+        }
+
+        /// <summary>Police du thème du document (titres ou corps), si le XML du tableau ne contient pas le thème.</summary>
+        private string ThemeFont(bool major)
+        {
+            string name;
+            if (_themeFonts.TryGetValue(major, out name)) return name;
+            try
+            {
+                dynamic scheme = _document.DocumentTheme.ThemeFontScheme;
+                dynamic fonts = major ? scheme.MajorFont : scheme.MinorFont;
+                name = WordCom.AsString(fonts.Item(1).Name); // msoThemeLatin
+            }
+            catch (Exception)
+            {
+                name = null;
+            }
+            _themeFonts[major] = name;
+            return name;
         }
 
         private static string TryGetXml(Func<object> getter)

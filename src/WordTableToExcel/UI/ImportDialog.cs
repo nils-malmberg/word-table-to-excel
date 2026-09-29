@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
+using System.Windows.Forms.VisualStyles;
 using WordTableToExcel.Core.ExcelImport;
 using WordTableToExcel.Import;
 using WordTableToExcel.Infrastructure;
@@ -77,8 +78,8 @@ namespace WordTableToExcel.UI
             });
             root.Controls.Add(new Label
             {
-                Text = "Cochez les feuilles à importer : chacune devient un tableau Word, inséré à l'emplacement du curseur, "
-                     + "avec sa mise en forme et les valeurs telles qu'Excel les affiche.",
+                Text = "Cochez les feuilles à importer (case « Tout » : toutes à la fois) : chacune devient un tableau Word, inséré à "
+                     + "l'emplacement du curseur, avec sa mise en forme et les valeurs telles qu'Excel les affiche.",
                 AutoSize = true,
                 MaximumSize = new Size(width, 0),
                 Margin = new Padding(0, 0, 0, 8)
@@ -174,7 +175,8 @@ namespace WordTableToExcel.UI
                 AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None,
                 Margin = new Padding(0)
             };
-            grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "Importer", Width = 62 });
+            // En-tête de la colonne : case « Tout » (dessinée ci-dessous) qui coche ou décoche toutes les feuilles.
+            grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "Tout", Width = 62, ToolTipText = "Cocher ou décocher toutes les feuilles" });
             grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Feuille", Width = 130, ReadOnly = true });
             grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Plage", Width = 90 });
             grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Taille", Width = 80, ReadOnly = true });
@@ -183,7 +185,11 @@ namespace WordTableToExcel.UI
             foreach (DataGridViewColumn c in grid.Columns) c.SortMode = DataGridViewColumnSortMode.NotSortable;
             grid.CellEndEdit += (s, e) =>
             {
-                if (e.ColumnIndex == ColumnRange) RefreshRow(e.RowIndex);
+                if (e.ColumnIndex == ColumnRange)
+                {
+                    RefreshRow(e.RowIndex);
+                    grid.InvalidateCell(ColumnImport, -1);
+                }
             };
             grid.CurrentCellDirtyStateChanged += (s, e) =>
             {
@@ -191,7 +197,89 @@ namespace WordTableToExcel.UI
                 if (grid.IsCurrentCellDirty && grid.CurrentCell is DataGridViewCheckBoxCell) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
             };
             grid.DataError += (s, e) => e.ThrowException = false;
+            grid.CellValueChanged += (s, e) =>
+            {
+                if (e.ColumnIndex == ColumnImport) grid.InvalidateCell(ColumnImport, -1);
+            };
+            grid.CellPainting += PaintSelectAllHeader;
+            grid.ColumnHeaderMouseClick += (s, e) =>
+            {
+                if (e.ColumnIndex == ColumnImport && e.Button == MouseButtons.Left) ToggleAll();
+            };
             return grid;
+        }
+
+        // ------------------------------------------------------------------ case « Tout »
+
+        /// <summary>Feuille cochable par « Tout » : importable, avec une plage valide qui tient dans un tableau Word.</summary>
+        private bool Eligible(int index)
+        {
+            var c = _candidates[index];
+            if (!c.CanImport) return false;
+            CellRange range;
+            string text = Convert.ToString(_grid.Rows[index].Cells[ColumnRange].Value, CultureInfo.CurrentCulture) ?? string.Empty;
+            if (!CellRange.TryParse(text, out range)) return false;
+            int rows, columns;
+            Count(c, range, out rows, out columns);
+            return columns <= SheetConverter.MaxWordColumns && (long)rows * columns <= SheetConverter.MaxCells;
+        }
+
+        private bool IsChecked(int index)
+        {
+            return _candidates[index].CanImport && Convert.ToBoolean(_grid.Rows[index].Cells[ColumnImport].Value ?? false, CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>État de la case « Tout » : cochée si toutes les feuilles cochables le sont, partielle si certaines seulement.</summary>
+        internal CheckState SelectAllState()
+        {
+            if (_grid == null) return CheckState.Unchecked;
+            int eligible = 0, eligibleChecked = 0, anyChecked = 0;
+            for (int i = 0; i < _candidates.Count && i < _grid.Rows.Count; i++)
+            {
+                bool isChecked = IsChecked(i);
+                if (isChecked) anyChecked++;
+                if (!Eligible(i)) continue;
+                eligible++;
+                if (isChecked) eligibleChecked++;
+            }
+            if (anyChecked == 0) return CheckState.Unchecked;
+            return eligible > 0 && eligibleChecked == eligible ? CheckState.Checked : CheckState.Indeterminate;
+        }
+
+        /// <summary>Clic sur « Tout » : tout décocher si tout est coché, sinon cocher toutes les feuilles cochables.</summary>
+        internal void ToggleAll()
+        {
+            _grid.EndEdit();
+            // La cellule en cours d'édition garderait son ancienne valeur affichée.
+            if (_grid.CurrentCell != null && _grid.CurrentCell.ColumnIndex == ColumnImport)
+            {
+                _grid.CurrentCell = _grid.Rows[_grid.CurrentCell.RowIndex].Cells[ColumnSheet];
+            }
+            bool uncheck = SelectAllState() == CheckState.Checked;
+            for (int i = 0; i < _candidates.Count; i++)
+            {
+                if (!_candidates[i].CanImport) continue;
+                if (uncheck) _grid.Rows[i].Cells[ColumnImport].Value = false;
+                else if (Eligible(i)) _grid.Rows[i].Cells[ColumnImport].Value = true;
+            }
+            _grid.InvalidateCell(ColumnImport, -1);
+        }
+
+        private void PaintSelectAllHeader(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex != -1 || e.ColumnIndex != ColumnImport) return;
+            e.PaintBackground(e.CellBounds, false);
+            var state = SelectAllState();
+            var glyphState = state == CheckState.Checked ? CheckBoxState.CheckedNormal
+                : state == CheckState.Indeterminate ? CheckBoxState.MixedNormal : CheckBoxState.UncheckedNormal;
+            Size glyph = CheckBoxRenderer.GetGlyphSize(e.Graphics, glyphState);
+            var location = new Point(e.CellBounds.Left + 6, e.CellBounds.Top + (e.CellBounds.Height - glyph.Height) / 2);
+            CheckBoxRenderer.DrawCheckBox(e.Graphics, location, glyphState);
+            int textLeft = location.X + glyph.Width + 4;
+            var textBounds = new Rectangle(textLeft, e.CellBounds.Top, Math.Max(0, e.CellBounds.Right - textLeft - 2), e.CellBounds.Height);
+            TextRenderer.DrawText(e.Graphics, "Tout", e.CellStyle.Font, textBounds, e.CellStyle.ForeColor,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            e.Handled = true;
         }
 
         private void FillGrid()
@@ -213,6 +301,7 @@ namespace WordTableToExcel.UI
         private void RefreshSizes()
         {
             for (int i = 0; i < _grid.Rows.Count; i++) RefreshRow(i);
+            _grid.InvalidateCell(ColumnImport, -1);
         }
 
         /// <summary>Met à jour la taille et la remarque d'une ligne après modification de la plage.</summary>

@@ -124,6 +124,17 @@ namespace WordTableToExcel.App
                         {
                             ShowOffscreen(dialog);
                             Capture(dialog, Path.Combine(output, "import.png"));
+                            report.AppendLine("       case « Tout » à l'ouverture : " + dialog.SelectAllState());
+
+                            // « Tout » : toutes les feuilles importables telles quelles cochées, puis aucune.
+                            dialog.ToggleAll();
+                            Application.DoEvents();
+                            if (dialog.SelectAllState() != CheckState.Checked) throw new InvalidOperationException("« Tout » n'a pas tout coché.");
+                            Capture(dialog, Path.Combine(output, "import-tout.png"));
+                            dialog.ToggleAll();
+                            Application.DoEvents();
+                            if (dialog.SelectAllState() != CheckState.Unchecked) throw new InvalidOperationException("« Tout » n'a pas tout décoché.");
+                            report.AppendLine("       case « Tout » : tout cocher puis tout décocher");
                             dialog.Close();
                         }
                     });

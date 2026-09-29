@@ -30,6 +30,9 @@ namespace WordTableToExcel.Core.Layout
         public VerticalAlignment VerticalAlignment = VerticalAlignment.Top;
         public int TextRotation;
 
+        /// <summary>Texte et mise en forme lus dans le XML (null si le XML ne le permet pas).</summary>
+        public XmlCellContent Content;
+
         public int LastRow
         {
             get { return Row + RowSpan - 1; }
@@ -61,6 +64,10 @@ namespace WordTableToExcel.Core.Layout
         public int[] SourceCellCounts;
         /// <summary>true si fond et bordures proviennent de l'analyse XML (sinon ils restent à lire via COM).</summary>
         public bool HasCellFormatting;
+        /// <summary>true si le texte et la mise en forme des caractères de chaque cellule ont été lus dans le XML.</summary>
+        public bool HasContent;
+        /// <summary>Texte visible du tableau selon le XML (pour vérification avec le texte renvoyé par Word).</summary>
+        public string XmlText;
 
         /// <summary>Cellules visibles qui commencent sur la ligne Word donnée, dans l'ordre.</summary>
         public List<LayoutCell> CellsStartingOnSourceRow(int sourceRow)

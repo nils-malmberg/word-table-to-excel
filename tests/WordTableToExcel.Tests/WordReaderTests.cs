@@ -216,6 +216,51 @@ namespace WordTableToExcel.Tests
         }
 
         [Fact]
+        public void ContentFromXml_WhenItsTextMatchesWord_NoPerCharacterCalls()
+        {
+            var b = new FakeDocumentBuilder();
+            // Même texte que le XML (medium_shading_merged), mise en forme différente côté « Word » (Arial, sans gras).
+            var rows = new List<IList<FakeCellSpec>>
+            {
+                new List<FakeCellSpec> { Cell(1, "Région"), Cell(2, "Ventes", 216), Cell(3, "Évolution") },
+                new List<FakeCellSpec> { Cell(1, "Nord"), Cell(2, "1 200"), Cell(3, "1 350"), Cell(4, "12,5 %") },
+                new List<FakeCellSpec> { Cell(2, "800"), Cell(3, "760"), Cell(4, "-5 %") },
+                new List<FakeCellSpec> { Cell(1, "Sud"), Cell(2, "2 000"), Cell(3, "2 100"), Cell(4, "5 %") },
+                new List<FakeCellSpec> { Cell(1, "Total"), Cell(2, "4 000"), Cell(3, "4 210"), Cell(4, "5,25 %") }
+            };
+            var table = b.Table(rows, Fixture("medium_shading_merged.flat.xml"));
+            int rangeCalls = b.Doc.RangeCalls;
+
+            var model = new WordTableReader(b.Doc, null) { ReadContentFromXml = true }.Read(table, 1, null);
+
+            Assert.Equal(0, b.Doc.FontCalls);
+            Assert.Equal(rangeCalls, b.Doc.RangeCalls);
+            Assert.Equal(18, model.Cells.Count);
+            var ventes = At(model, 0, 1);
+            Assert.Equal("Ventes", ventes.PlainText);
+            Assert.Equal(2, ventes.ColumnSpan);
+            // Mise en forme du XML : ligne d'en-tête du style de tableau (gras, blanc).
+            Assert.True(ventes.Runs.Single().Format.Bold);
+            Assert.Equal(Hex("FFFFFF"), ventes.Runs.Single().Format.Color);
+            Assert.Equal("-5 %", At(model, 2, 3).PlainText);
+            Assert.Equal(Hex("FFFF00"), At(model, 3, 3).Fill);
+        }
+
+        [Fact]
+        public void ContentFromXml_WhenWordShowsOtherText_ReadsCellByCell()
+        {
+            var b = new FakeDocumentBuilder();
+            var table = BuildSampleTable(b, Fixture("medium_shading_merged.flat.xml")); // « 1 200 (+hausse) » absent du XML
+            var model = new WordTableReader(b.Doc, null) { ReadContentFromXml = true }.Read(table, 1, null);
+
+            Assert.True(b.Doc.FontCalls > 0);
+            var rich = At(model, 1, 1);
+            Assert.Equal("1 200 (+hausse)", rich.PlainText);
+            Assert.True(rich.Runs.Single(r => r.Text == "hausse").Format.Bold);
+            Assert.Equal("Arial", rich.Runs[0].Format.FontName);
+        }
+
+        [Fact]
         public void FallbackWithoutXml_UsesWidthsAndComFormatting()
         {
             var b = new FakeDocumentBuilder();

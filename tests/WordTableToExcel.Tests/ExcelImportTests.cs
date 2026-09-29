@@ -569,6 +569,26 @@ namespace WordTableToExcel.Tests
                 Assert.Equal(result.Table.RowCount, layout.RowCount);
                 Assert.Equal(result.Table.ColumnCount, layout.ColumnCount);
                 Assert.Equal(result.Table.Cells.Count, layout.Cells.Count);
+
+                // Aller-retour Excel → Word → lecture rapide du XML (export de l'application) : mêmes valeurs,
+                // même mise en forme des caractères.
+                layout = Core.Layout.WordXmlTableParser.Parse(xml);
+                Assert.True(layout.HasContent);
+                foreach (var source in result.Table.Cells)
+                {
+                    var read = layout.Cells.Single(c => c.Row == source.Row && c.Column == source.Column);
+                    var runs = Core.Text.CellTextSanitizer.Clean(read.Content.Runs);
+                    Assert.Equal(source.PlainText.Replace(' ', ' ').Replace(' ', ' '), string.Concat(runs.Select(r => r.Text)).Replace(' ', ' ').Replace(' ', ' '));
+                    var expected = Core.Text.CellTextSanitizer.Clean(source.Runs);
+                    for (int i = 0; i < Math.Min(expected.Count, runs.Count); i++)
+                    {
+                        Assert.Equal(expected[i].Format.Bold, runs[i].Format.Bold);
+                        Assert.Equal(expected[i].Format.Italic, runs[i].Format.Italic);
+                        Assert.Equal(expected[i].Format.Color ?? Rgb.Black, runs[i].Format.Color ?? Rgb.Black);
+                        Assert.Equal(expected[i].Format.FontName, runs[i].Format.FontName);
+                        Assert.Equal(expected[i].Format.Size, runs[i].Format.Size);
+                    }
+                }
             }
         }
     }

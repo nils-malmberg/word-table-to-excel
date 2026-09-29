@@ -33,7 +33,8 @@ namespace WordTableToExcel.Core.Layout
         }
 
         /// <summary>Analyse le XML ; renvoie null si aucun tableau n'y figure.</summary>
-        public static TableLayout Parse(string xml)
+        /// <param name="themeFontFallback">Polices du thème (vrai = titres), si le XML ne contient pas le thème.</param>
+        public static TableLayout Parse(string xml, Func<bool, string> themeFontFallback = null)
         {
             if (string.IsNullOrEmpty(xml)) return null;
             var settings = new XmlReaderSettings
@@ -50,10 +51,10 @@ namespace WordTableToExcel.Core.Layout
             {
                 document = XDocument.Load(reader);
             }
-            return Parse(document);
+            return Parse(document, themeFontFallback);
         }
 
-        public static TableLayout Parse(XDocument document)
+        public static TableLayout Parse(XDocument document, Func<bool, string> themeFontFallback = null)
         {
             var root = document.Root;
             if (root == null) return null;
@@ -61,7 +62,12 @@ namespace WordTableToExcel.Core.Layout
             XElement body = root.Descendants().FirstOrDefault(e => OoxmlXml.Is(e, "body"));
             XElement tbl = (body ?? root).Descendants().FirstOrDefault(e => OoxmlXml.Is(e, "tbl"));
             if (tbl == null) return null;
+            return Parse(root, tbl, themeFontFallback);
+        }
 
+        /// <summary>Analyse le tableau <paramref name="tbl"/> du document <paramref name="root"/> (styles et thème compris).</summary>
+        public static TableLayout Parse(XElement root, XElement tbl, Func<bool, string> themeFontFallback = null)
+        {
             var styles = new TableStyleSheet(root);
             var tblPr = OoxmlXml.Child(tbl, "tblPr");
             string styleId = OoxmlXml.Attr(OoxmlXml.Child(tblPr, "tblStyle"), "val");
@@ -195,6 +201,29 @@ namespace WordTableToExcel.Core.Layout
                 context.Apply(cell, raw == null ? null : raw.TcPr, raw == null ? null : raw.Tc);
                 cell.SourceTag = null;
             }
+
+            // Texte et mise en forme des caractères, lus dans le même XML (Open XML uniquement).
+            try
+            {
+                var content = WordXmlContentReader.TryCreate(root, tbl, themeFontFallback);
+                if (content != null)
+                {
+                    foreach (var cell in layout.Cells)
+                    {
+                        RawCell raw;
+                        cell.Content = tcPrByCell.TryGetValue(cell, out raw) ? content.ReadCell(raw.Tc, context.Formats(cell)) : new XmlCellContent();
+                    }
+                    layout.XmlText = content.TableText(tbl);
+                    layout.HasContent = true;
+                }
+            }
+            catch (Exception)
+            {
+                // XML inattendu : le contenu sera lu par Word, cellule par cellule.
+                foreach (var cell in layout.Cells) cell.Content = null;
+                layout.XmlText = null;
+                layout.HasContent = false;
+            }
             return layout;
         }
 
@@ -287,6 +316,12 @@ namespace WordTableToExcel.Core.Layout
                         }
                     }
                 }
+            }
+
+            /// <summary>Mise en forme du style de tableau applicable à la cellule, de la plus prioritaire à la moins prioritaire.</summary>
+            public List<XElement> Formats(LayoutCell cell)
+            {
+                return FormatsFor(Regions(cell)).ToList();
             }
 
             private BorderLine ResolveEdge(LayoutCell cell, XElement tcBorders, List<TableRegion> regions, string edge)

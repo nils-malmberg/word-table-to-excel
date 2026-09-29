@@ -648,7 +648,7 @@ namespace WordTableToExcel.App
                     return;
                 }
                 object application = ((dynamic)document).Application;
-                new ExportService(application).Run(this, document);
+                new ExportService(application) { ReadContentFromXml = true }.Run(this, document);
             });
         }
 
@@ -687,7 +687,7 @@ namespace WordTableToExcel.App
 
             using (hidden)
             {
-                new ExportService(hidden.Application).Run(this, hidden.Document);
+                new ExportService(hidden.Application) { ReadContentFromXml = true }.Run(this, hidden.Document);
             }
         }
 

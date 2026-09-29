@@ -30,7 +30,8 @@ IMPORTER DES TABLEAUX EXCEL DANS WORD
   2. Dans l'application, vérifiez l'encadré (document, page, paragraphe),
      puis cliquez sur « Importer depuis Excel... » (ou déposez le classeur
      Excel sur la fenêtre).
-  3. Cochez les feuilles voulues (un tableau par feuille), la plage, le texte
+  3. Cochez les feuilles voulues (un tableau par feuille ; la case « Tout » en
+     haut de la liste les coche ou décoche toutes), la plage, le texte
      de la légende et les options. Les valeurs apparaissent telles qu'Excel
      les affiche (nombres, dates, monnaies, pourcentages) avec leur mise en
      forme. Sans texte de légende, « [Titre du tableau] » est surligné en

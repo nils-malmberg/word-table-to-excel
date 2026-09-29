@@ -70,7 +70,9 @@ il ne faut pas le contourner, mais demander au service informatique.
   tableaux de chacun) et les fichiers ajoutés avec **Ajouter un fichier Word…** ou par glisser-déposer.
   Sélectionnez-en un, puis **Exporter vers Excel…** : même choix A/B, mêmes options et même classeur qu'avec
   le complément. Un document ouvert est exporté tel qu'il est à l'écran (modifications non enregistrées
-  comprises). Un fichier non ouvert est lu par une instance de Word **distincte et invisible**, en lecture seule,
+  comprises). Pour aller vite, l'application lit chaque tableau d'un bloc (le XML que Word fournit : texte,
+  styles, mise en forme) au lieu d'interroger Word caractère par caractère ; si ce texte diffère de celui
+  que Word affiche (texte masqué, suppressions suivies…), le tableau est relu cellule par cellule. Un fichier non ouvert est lu par une instance de Word **distincte et invisible**, en lecture seule,
   macros désactivées, puis Word est refermé : vos documents ouverts ne sont pas touchés.
 - **Excel → Word.** Cliquez dans Word à l'endroit voulu, revenez dans l'application : l'encadré indique où les
   tableaux seront insérés (document, page, « juste après le paragraphe « … » », dans un tableau, dans un en-tête…).
@@ -236,7 +238,8 @@ l'emplacement du curseur, sans rien supprimer ni remplacer, et s'annule d'un seu
 2. Cliquez sur **Accueil › Excel › Importer depuis Excel** et choisissez un classeur
    (`.xlsx`, `.xlsm`, `.xltx`, `.xltm` ; `.xls`, `.xlsb`, `.ods`, `.csv` si Excel est installé pour les convertir).
    Le classeur peut rester ouvert dans Excel : il est lu, jamais modifié.
-3. La boîte de dialogue liste les feuilles : cochez celles à importer (**un tableau par feuille**). Pour chacune :
+3. La boîte de dialogue liste les feuilles : cochez celles à importer (**un tableau par feuille** ; la case **Tout**, en
+   tête de colonne, les coche ou les décoche toutes). Pour chacune :
    - **Plage** : détectée automatiquement (zone d'impression si elle existe, sinon cellules remplies et cellules
      voisines mises en forme, fusions et tableaux Excel compris) ; modifiable, par exemple `A3:F20` ;
    - **Texte de la légende** : texte placé après « Tableau N : ». Si la feuille commence par une légende
@@ -403,6 +406,13 @@ de tableaux, et choix du point d'insertion avec un faux Word. L'intégration con
 l'import avec la DLL .NET Framework 4 dans Windows PowerShell (`tests/ci/framework-check.ps1`), c'est-à-dire
 dans le même environnement d'exécution que Word.
 
+Lecture rapide de l'application (texte et mise en forme lus dans le XML) : les 13 tableaux de
+`tests/fixtures/rapport_test_complexe.docx` (styles de tableau intégrés de Word, champs, fusions, tableau imbriqué),
+dont la mise en forme lue a été comparée caractère par caractère à celle qu'applique LibreOffice au même
+document (aucun écart) ; priorité des styles et propriétés « bascule », champs, révisions, texte masqué, symboles,
+couleurs de thème ; aller-retour Excel → Word → lecture sur tout le classeur de test ; bascule vers la lecture
+cellule par cellule quand le texte diffère de celui de Word.
+
 Pour l'application : tests de la liste des documents, du texte décrivant le point d'insertion et des erreurs de
 communication avec Word ; sous Windows, `tests/ci/app-selftest.ps1` vérifie l'exécutable (fichier unique AnyCPU,
 manifeste sans élévation, icône), lance son autotest (`TableauxWordExcel.exe --selftest <dossier> <classeur>` :
@@ -440,7 +450,8 @@ src/WordTableToExcel/
 ├── Word/             Accès au document via le modèle objet (liaison tardive) :
 │                     lecture des tableaux et légendes, insertion des tableaux importés et de leur légende
 ├── Core/             Code indépendant de Word et de Windows :
-│   ├── Layout/       Analyse du XML des tableaux (grille, fusions, styles de tableau, bordures)
+│   ├── Layout/       Analyse du XML des tableaux (grille, fusions, styles de tableau, bordures) et, pour
+│   │                 l'application, texte et mise en forme effective des caractères (styles, thème, champs)
 │   ├── Captions/     Reconnaissance multilingue des légendes, attribution, noms de feuilles
 │   ├── Text/         Nettoyage du texte, reconnaissance des nombres
 │   ├── Xlsx/         Écriture du classeur .xlsx (ZIP + SpreadsheetML, styles dédupliqués)
