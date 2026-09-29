@@ -18,10 +18,12 @@
     <Compile Include="..\..\src\WordTableToExcel\Core\**\*.cs" Link="Linked\Core\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\src\WordTableToExcel\Word\**\*.cs" Link="Linked\Word\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\..\src\WordTableToExcel\Export\ExportPlan.cs" Link="Linked\Export\ExportPlan.cs" />
+    <Compile Include="..\..\src\WordTableToExcel\Infrastructure\Log.cs" Link="Linked\Infrastructure\Log.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\fixtures\*.xml" Link="fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\fixtures\*.xlsx" Link="fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

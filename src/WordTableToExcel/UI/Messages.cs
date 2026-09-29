@@ -26,11 +26,17 @@ namespace WordTableToExcel.UI
         /// <summary>Affiche une erreur inattendue ; l'extension ne laisse jamais une exception remonter jusqu'à Word.</summary>
         public static void Error(IWin32Window owner, string context, Exception ex)
         {
+            Error(owner, context, ex, true);
+        }
+
+        /// <param name="documentUnchanged">true : rappeler que le document Word n'a pas été modifié (export).</param>
+        public static void Error(IWin32Window owner, string context, Exception ex, bool documentUnchanged)
+        {
             Log.Error(context, ex);
             try
             {
                 string text = context + Environment.NewLine + Environment.NewLine
-                    + "Le document Word n'a pas été modifié." + Environment.NewLine + Environment.NewLine
+                    + (documentUnchanged ? "Le document Word n'a pas été modifié." + Environment.NewLine + Environment.NewLine : string.Empty)
                     + "Détail : " + (ex == null ? "(aucun)" : ex.Message) + Environment.NewLine + Environment.NewLine
                     + "Journal : " + Log.FilePath;
                 MessageBox.Show(owner, text, Title, MessageBoxButtons.OK, MessageBoxIcon.Error);

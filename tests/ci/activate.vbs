@@ -11,7 +11,7 @@ Else
     ribbon = addin.GetCustomUI("Microsoft.Word.Document")
     If Err.Number <> 0 Then
         result = "ECHEC GetCustomUI : 0x" & Hex(Err.Number) & " " & Err.Description
-    ElseIf InStr(ribbon, "OnExportClick") > 0 Then
+    ElseIf InStr(ribbon, "OnExportClick") > 0 And InStr(ribbon, "OnImportClick") > 0 Then
         result = "OK"
     Else
         result = "ECHEC ruban : " & ribbon

@@ -37,6 +37,11 @@ jobs:
       - name: Compilation du complément (.NET Framework 4.0, AnyCPU)
         run: dotnet build src/WordTableToExcel -c Release
 
+      # Word charge le complément dans le .NET Framework : on y vérifie l'import (valeurs affichées, XML Word).
+      - name: Import Excel vérifié sur .NET Framework (Windows PowerShell)
+        shell: powershell
+        run: ./tests/ci/framework-check.ps1 -Dll src/WordTableToExcel/bin/Release/net40/WordTableToExcel.dll -Fixture tests/fixtures/import_complexe.xlsx
+
       # Le dossier Installation/ du dépôt est ce que l'utilisateur obtient en extrayant le .zip de GitHub.
       - name: Installation depuis le dossier Installation/ du dépôt (sans droits administrateur)
         shell: powershell

@@ -15,6 +15,15 @@ namespace WordTableToExcel.Infrastructure
         /// <summary>Libellés de légende supplémentaires, séparés par des points-virgules (réglage avancé).</summary>
         public string ExtraCaptionLabels;
 
+        // Import Excel → Word
+        public bool ImportAddCaption = true;
+        /// <summary>null = selon les légendes déjà présentes dans le document.</summary>
+        public bool? ImportCaptionBelow;
+        public bool ImportFitToPage = true;
+        public bool ImportSkipHidden = true;
+        public bool ImportGridlines;
+        public string ImportLastFolder;
+
         public static Settings Load()
         {
             var s = new Settings();
@@ -28,6 +37,13 @@ namespace WordTableToExcel.Infrastructure
                     s.ConvertNumbers = ReadBool(key, "ConvertNumbers", s.ConvertNumbers);
                     s.LastFolder = key.GetValue("LastFolder") as string;
                     s.ExtraCaptionLabels = key.GetValue("ExtraCaptionLabels") as string;
+                    s.ImportAddCaption = ReadBool(key, "ImportAddCaption", s.ImportAddCaption);
+                    object below = key.GetValue("ImportCaptionBelow");
+                    if (below is int) s.ImportCaptionBelow = (int)below != 0;
+                    s.ImportFitToPage = ReadBool(key, "ImportFitToPage", s.ImportFitToPage);
+                    s.ImportSkipHidden = ReadBool(key, "ImportSkipHidden", s.ImportSkipHidden);
+                    s.ImportGridlines = ReadBool(key, "ImportGridlines", s.ImportGridlines);
+                    s.ImportLastFolder = key.GetValue("ImportLastFolder") as string;
                 }
             }
             catch (Exception ex)
@@ -48,6 +64,12 @@ namespace WordTableToExcel.Infrastructure
                     key.SetValue("IncludeCaptionRow", IncludeCaptionRow ? 1 : 0, RegistryValueKind.DWord);
                     key.SetValue("ConvertNumbers", ConvertNumbers ? 1 : 0, RegistryValueKind.DWord);
                     if (!string.IsNullOrEmpty(LastFolder)) key.SetValue("LastFolder", LastFolder);
+                    key.SetValue("ImportAddCaption", ImportAddCaption ? 1 : 0, RegistryValueKind.DWord);
+                    if (ImportCaptionBelow.HasValue) key.SetValue("ImportCaptionBelow", ImportCaptionBelow.Value ? 1 : 0, RegistryValueKind.DWord);
+                    key.SetValue("ImportFitToPage", ImportFitToPage ? 1 : 0, RegistryValueKind.DWord);
+                    key.SetValue("ImportSkipHidden", ImportSkipHidden ? 1 : 0, RegistryValueKind.DWord);
+                    key.SetValue("ImportGridlines", ImportGridlines ? 1 : 0, RegistryValueKind.DWord);
+                    if (!string.IsNullOrEmpty(ImportLastFolder)) key.SetValue("ImportLastFolder", ImportLastFolder);
                 }
             }
             catch (Exception ex)

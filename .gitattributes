@@ -11,3 +11,4 @@
 *.docx binary
 *.dll binary
 *.snk binary
+*.xlsx binary

@@ -30,6 +30,10 @@ namespace WordTableToExcel.Core.Model
         public double[] RowHeightsPt;
         /// <summary>true si la hauteur de ligne Word est « exacte » (sinon « au moins »).</summary>
         public bool[] RowHeightExact;
+        /// <summary>Nombre de lignes d'en-tête à répéter en haut de chaque page (import Excel → Word).</summary>
+        public int HeaderRowCount;
+        /// <summary>Tableau de droite à gauche (feuille Excel en mode « de droite à gauche »).</summary>
+        public bool RightToLeft;
 
         /// <summary>Remarques non bloquantes rencontrées lors de la lecture (affichées dans le rapport final).</summary>
         public readonly List<string> Warnings = new List<string>();

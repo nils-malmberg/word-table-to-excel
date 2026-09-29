@@ -110,6 +110,8 @@ namespace WordTableToExcel.Core.Model
         public VerticalAlignment VerticalAlignment = VerticalAlignment.Top;
         /// <summary>Rotation au sens Excel : 0, 90 (bas → haut) ou 180 (haut → bas).</summary>
         public int TextRotation;
+        /// <summary>Retrait du texte en niveaux Excel (1 niveau ≈ largeur de 3 caractères) ; 0 = aucun.</summary>
+        public int IndentLevel;
         public CellBorders Borders = new CellBorders();
 
         public bool IsMerged
