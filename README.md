@@ -76,6 +76,7 @@ Contenu du dossier `Installation` :
 | `WordTableToExcel.Shim64.dll` | Chargeur natif pour Office 64 bits |
 | `install.cmd`, `uninstall.cmd` | Installation / désinstallation pour l'utilisateur courant |
 | `LISEZMOI.txt` | Mode d'emploi résumé |
+| `INFORMATIQUE.txt`, `signer-les-dll.ps1` | Pour le service informatique : signature du complément sur les postes qui exigent des compléments signés |
 
 `install.cmd` (un script `cmd` lisible, sans PowerShell) copie les trois DLL dans
 `%LOCALAPPDATA%\WordTableToExcel`, retire la marque « fichier provenant d'Internet », enregistre le
@@ -273,6 +274,7 @@ supprimés. Aucun droit administrateur n'est nécessaire.
 | Problème | Solution |
 |---|---|
 | Le bouton n'apparaît pas | **Fichier › Options › Compléments**, liste *Gérer : Compléments COM* › **Atteindre…** : cochez « Tableaux Word vers Excel ». |
+| « Non chargé. L'utilisateur a choisi de désactiver les macros » | Word refuse les compléments non signés : voir [Postes d'entreprise](#postes-dentreprise-compléments-signés). `install.cmd` le détecte et l'indique. |
 | Le complément a été désactivé par Word | **Fichier › Options › Compléments**, *Gérer : Éléments désactivés* › **Atteindre…** : réactivez-le, puis redémarrez Word. |
 | « Comportement au chargement : non chargé. Une erreur d'exécution s'est produite » | Vérifiez que .NET Framework 4.x est installé (inclus dans Windows 8, 10, 11) ; relancez `install.cmd`, qui recopie et débloque les fichiers. Le journal indique l'étape en cause. |
 | `install.cmd` signale un fichier manquant | Le `.zip` n'a pas été extrait : clic droit › *Extraire tout*, puis lancez `install.cmd` depuis le dossier extrait. |
@@ -284,6 +286,27 @@ supprimés. Aucun droit administrateur n'est nécessaire.
 | Import : annuler | **Ctrl+Z** retire en une fois tous les tableaux et légendes insérés. |
 
 Journal de diagnostic : `%LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log`.
+
+### Postes d'entreprise (compléments signés)
+
+Sur beaucoup de postes professionnels, Word n'accepte que les compléments **signés par un éditeur approuvé**
+(stratégie *Require that application add-ins are signed by Trusted Publisher*, recommandée par les lignes
+de base de sécurité Microsoft 365). Le complément est alors installé mais pas chargé, et la liste des
+compléments COM indique « Non chargé. L'utilisateur a choisi de désactiver les macros ». `install.cmd`
+détecte cette situation et affiche la marche à suivre :
+
+- **Réglage personnel** (cases modifiables) : dans Word, **Fichier › Options › Centre de gestion de la
+  confidentialité › Paramètres du Centre de gestion de la confidentialité › Compléments**, décochez
+  « Exiger que les compléments d'application soient signés par un éditeur approuvé » et « Désactiver tous
+  les compléments d'application », puis redémarrez Word et cochez le complément dans la liste des compléments COM.
+- **Règle imposée par l'organisation** (cases grisées) : elle ne se contourne pas depuis le poste. Le service
+  informatique signe les trois DLL avec le certificat de signature de code de l'organisation, en quelques
+  minutes : [`Installation/INFORMATIQUE.txt`](Installation/INFORMATIQUE.txt) explique la démarche et
+  [`Installation/signer-les-dll.ps1`](Installation/signer-les-dll.ps1) fait la signature. Chacun lance ensuite
+  `install.cmd` depuis le dossier signé.
+
+L'intégration continue vérifie que les DLL signées s'installent et s'activent comme les autres, et que
+`install.cmd` signale bien ces règles.
 
 ## Compilation et tests
 

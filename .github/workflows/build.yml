@@ -47,6 +47,11 @@ jobs:
         shell: powershell
         run: ./tests/ci/com-smoke-test.ps1 -Folder Installation
 
+      # Postes d'entreprise : DLL signées (certificat de test) et règles « compléments signés » de Word.
+      - name: Signature des DLL et détection des règles de sécurité de Word
+        shell: powershell
+        run: ./tests/ci/enterprise-check.ps1 -Folder Installation
+
       - uses: actions/download-artifact@v4
         with:
           name: shim
@@ -56,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist/Installation | Out-Null
-          Copy-Item Installation/*.cmd, Installation/LISEZMOI.txt dist/Installation/
+          Copy-Item Installation/*.cmd, Installation/*.txt, Installation/*.ps1 dist/Installation/
           Copy-Item src/WordTableToExcel/bin/Release/net40/WordTableToExcel.dll dist/Installation/
           Copy-Item shim-out/*.dll dist/Installation/
 

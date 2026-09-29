@@ -26,6 +26,16 @@ UTILISER
   « Tableau N : ... » est ajoutée ; sans texte, « [Titre du tableau] » est
   surligné en jaune, à compléter. Ctrl+Z annule tout l'import.
 
+SI LES BOUTONS N'APPARAISSENT PAS (PC PROFESSIONNEL)
+  Si Word indique « Non chargé. L'utilisateur a choisi de désactiver les macros »,
+  il n'accepte que les compléments signés (install.cmd le signale) :
+    - cases modifiables : Fichier > Options > Centre de gestion de la
+      confidentialité > Paramètres... > Compléments : décochez « Exiger que les
+      compléments d'application soient signés... » et « Désactiver tous les
+      compléments d'application », puis redémarrez Word ;
+    - cases grisées (règle de l'entreprise) : transmettez INFORMATIQUE.txt à
+      votre service informatique, qui peut signer le complément.
+
 DÉSINSTALLER
   Fermez Word, puis double-cliquez sur « uninstall.cmd ».
 
@@ -34,6 +44,8 @@ CONTENU DU DOSSIER
   WordTableToExcel.Shim32.dll   chargeur pour Office 32 bits
   WordTableToExcel.Shim64.dll   chargeur pour Office 64 bits
   install.cmd / uninstall.cmd   installation / désinstallation (utilisateur courant)
+  INFORMATIQUE.txt              note pour le service informatique (signature)
+  signer-les-dll.ps1            script de signature (service informatique)
 
 Les fichiers sont copiés dans %LOCALAPPDATA%\WordTableToExcel.
 En cas de problème : %LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log
