@@ -135,6 +135,21 @@ namespace WordTableToExcel.Import
 
         private object GetEditableDocument(IWin32Window owner)
         {
+            try
+            {
+                // Fenêtre en mode protégé au premier plan (d'autres documents peuvent être ouverts derrière).
+                dynamic protectedWindow = _application.ActiveProtectedViewWindow;
+                if (protectedWindow != null && WordCom.IsTrue(protectedWindow.Active))
+                {
+                    Messages.Info(owner, "Le document est ouvert en mode protégé.\n\nCliquez sur « Activer la modification », puis relancez l'import.");
+                    return null;
+                }
+            }
+            catch (Exception)
+            {
+                // Word 2007 : pas de mode protégé ; ou aucune fenêtre protégée.
+            }
+
             object document = null;
             try
             {
@@ -159,6 +174,29 @@ namespace WordTableToExcel.Import
                     ? "Le document est ouvert en mode protégé.\n\nCliquez sur « Activer la modification », puis relancez l'import."
                     : "Aucun document n'est ouvert.\n\nOuvrez ou créez un document Word, placez le curseur à l'endroit voulu, puis relancez l'import.");
                 return null;
+            }
+            try
+            {
+                if (WordCom.IsTrue(((dynamic)document).Final))
+                {
+                    Messages.Warning(owner, "Le document est marqué comme final (lecture seule).\n\n"
+                        + "Cliquez sur « Modifier quand même » dans la barre d'information, puis relancez l'import.");
+                    return null;
+                }
+            }
+            catch (Exception)
+            {
+                // Propriété absente des anciennes versions.
+            }
+            try
+            {
+                // Mode Lecture (Word 2013+) : on repasse en mode Page pour pouvoir insérer.
+                dynamic view = _application.ActiveWindow.View;
+                if (WordCom.IsTrue(view.ReadingLayout)) view.ReadingLayout = false;
+            }
+            catch (Exception)
+            {
+                // Sans conséquence.
             }
             try
             {

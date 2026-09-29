@@ -219,7 +219,8 @@ reproduit les règles d'Excel.
 | Résultats de formules | `=SOMME(B4:E4)` | résultat enregistré par Excel |
 
 Les arrondis sont faits comme dans Excel (sur 15 chiffres significatifs, 5 arrondi au-dessus : `1,005` au
-format `0,00` donne `1,01`). Séparateurs décimal et de milliers, date courte et noms des mois suivent les
+format `0,00` donne `1,01`). Une colonne trop étroite n'a pas d'effet : là où Excel afficherait `#####` ou
+moins de décimales au format Standard, Word reçoit la valeur complète. Séparateurs décimal et de milliers, date courte et noms des mois suivent les
 paramètres régionaux de Windows, comme dans Excel.
 
 ### Mise en forme importée
