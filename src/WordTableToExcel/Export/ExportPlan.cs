@@ -11,6 +11,10 @@ namespace WordTableToExcel.Export
         public int Index;
         public string Caption;
         public CaptionPosition CaptionPosition;
+        /// <summary>Page où commence le tableau (0 : inconnue).</summary>
+        public int StartPage;
+        /// <summary>Page où se termine le tableau (0 : inconnue).</summary>
+        public int EndPage;
 
         public bool HasCaption
         {
@@ -26,18 +30,26 @@ namespace WordTableToExcel.Export
     }
 
     /// <summary>
-    /// Sélection des tableaux (option A : uniquement ceux qui ont une légende ; option B : tous)
-    /// et attribution des noms de feuilles. Utilisé à l'identique pour l'aperçu et pour l'export.
+    /// Sélection des tableaux (option A : uniquement ceux qui ont une légende ; option B : tous ; dans les deux cas
+    /// sans les tableaux décochés) et attribution des noms de feuilles. Utilisé à l'identique pour l'aperçu et pour l'export.
     /// </summary>
     public static class ExportPlan
     {
-        public static List<PlannedSheet> Build(IEnumerable<TableEntry> tables, bool allTables)
+        /// <summary>Tableaux proposés par l'option A ou B (avant les cases décochées).</summary>
+        public static bool IsCandidate(TableEntry table, bool allTables)
+        {
+            return allTables || table.HasCaption;
+        }
+
+        /// <param name="excluded">Rang des tableaux décochés par l'utilisateur (null : aucun).</param>
+        public static List<PlannedSheet> Build(IEnumerable<TableEntry> tables, bool allTables, ICollection<int> excluded = null)
         {
             var names = new SheetNameBuilder();
             var plan = new List<PlannedSheet>();
             foreach (var table in tables)
             {
-                if (!allTables && !table.HasCaption) continue;
+                if (!IsCandidate(table, allTables)) continue;
+                if (excluded != null && excluded.Contains(table.Index)) continue;
                 string fallback = SheetNameBuilder.DefaultName(table.Index);
                 plan.Add(new PlannedSheet
                 {

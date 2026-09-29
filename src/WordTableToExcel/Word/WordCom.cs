@@ -70,6 +70,28 @@ namespace WordTableToExcel.Word
         {
             return Math.Abs(value - Undefined) < 0.5;
         }
+
+        /// <summary>Version de Word (« 16.0 ») ; « ? » si inconnue.</summary>
+        public static string WordVersion(object application)
+        {
+            try
+            {
+                return Convert.ToString(((dynamic)application).Version, CultureInfo.InvariantCulture);
+            }
+            catch (Exception)
+            {
+                return "?";
+            }
+        }
+
+        /// <summary>Numéro de version principal de Word (12 = 2007, 14 = 2010, 15 = 2013, 16 = 2016 et suivants) ; 0 si inconnu.</summary>
+        public static int WordMajorVersion(object application)
+        {
+            string version = WordVersion(application);
+            int dot = version.IndexOf('.');
+            int major;
+            return int.TryParse(dot > 0 ? version.Substring(0, dot) : version, NumberStyles.Integer, CultureInfo.InvariantCulture, out major) ? major : 0;
+        }
     }
 
     /// <summary>Suivi de progression et d'annulation pendant la lecture du document.</summary>

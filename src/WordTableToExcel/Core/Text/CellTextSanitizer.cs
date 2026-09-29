@@ -103,6 +103,45 @@ namespace WordTableToExcel.Core.Text
             return runs.Count == 0 ? string.Empty : runs[0].Text;
         }
 
+        /// <summary>
+        /// Texte réduit à ses caractères visibles, pour comparer deux lectures d'un même contenu : codes de champ,
+        /// caractères de contrôle, espaces et sauts de ligne sont ignorés (ils diffèrent selon la façon de lire),
+        /// sans limite de longueur.
+        /// </summary>
+        public static string Comparable(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            var sb = new StringBuilder(text.Length);
+            var fieldStack = new List<bool>();
+            foreach (char c in text)
+            {
+                if (c == FieldBegin)
+                {
+                    fieldStack.Add(true);
+                    continue;
+                }
+                if (c == FieldSeparator)
+                {
+                    if (fieldStack.Count > 0) fieldStack[fieldStack.Count - 1] = false;
+                    continue;
+                }
+                if (c == FieldEnd)
+                {
+                    if (fieldStack.Count > 0) fieldStack.RemoveAt(fieldStack.Count - 1);
+                    continue;
+                }
+                if (fieldStack.Contains(true)) continue;
+                if (c == '\u001E')
+                {
+                    sb.Append('-');
+                    continue;
+                }
+                if (c < ' ' || char.IsWhiteSpace(c) || c == '﻿' || c == '​') continue;
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
         private static bool TryMap(char c, out char mapped)
         {
             mapped = c;

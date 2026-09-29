@@ -1,0 +1,47 @@
+﻿TABLEAUX WORD VERS EXCEL - note pour le service informatique
+==============================================================
+
+Le complément ne se charge pas sur les postes où Word exige des compléments
+signés : stratégie « Require that application add-ins are signed by Trusted
+Publisher » (Word\Security\requireaddinsig = 1), souvent appliquée par les
+lignes de base de sécurité Microsoft 365 / CIS, ou « Disable all application
+add-ins » (disablealladdins). Word affiche alors, dans Fichier › Options ›
+Compléments › Compléments COM : « Non chargé. L'utilisateur a choisi de
+désactiver les macros ».
+
+FONCTIONNEMENT DU COMPLÉMENT
+  - Complément COM pour Word, installé pour l'utilisateur courant par
+    install.cmd, sans droits administrateur (HKCU uniquement).
+  - Fichiers copiés dans %LOCALAPPDATA%\WordTableToExcel :
+      WordTableToExcel.Shim32.dll / .Shim64.dll  chargeur natif (C) enregistré
+          comme InprocServer32 de la classe {03F63233-F2FE-4A75-AF7A-F99CBEDC8030}
+          (ProgID WordTableToExcel.Connect) ; il démarre .NET Framework 4
+      WordTableToExcel.dll  le complément (.NET Framework 4, nom fort)
+  - C'est la signature Authenticode du fichier déclaré dans InprocServer32
+    (le chargeur) que Word vérifie.
+  - Code source complet et compilation reproductible : voir le dépôt GitHub
+    (dossier src/, intégration continue .github/workflows/build.yml).
+
+SOLUTION RECOMMANDÉE : SIGNER LES TROIS DLL
+  Avec un certificat de signature de code de l'organisation, déjà reconnu comme
+  « éditeur approuvé » sur les postes (magasin Trusted Publishers) :
+
+  1. Dans ce dossier, sous Windows PowerShell :
+       powershell -ExecutionPolicy Bypass -File .\signer-les-dll.ps1 -Empreinte <empreinte du certificat>
+     (le certificat, avec sa clé privée, doit être dans le magasin personnel
+      de l'utilisateur ou de l'ordinateur ; horodatage par défaut :
+      http://timestamp.digicert.com, modifiable avec -Horodatage)
+     Équivalent avec signtool :
+       signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /sha1 <empreinte> ^
+         WordTableToExcel.Shim32.dll WordTableToExcel.Shim64.dll WordTableToExcel.dll
+  2. Diffuser le dossier signé ; chaque utilisateur lance install.cmd (ou
+     déploiement par vos outils habituels : copie des fichiers et clés HKCU
+     reproduites à partir d'install.cmd).
+  3. Si les utilisateurs avaient déjà installé la version non signée : relancer
+     install.cmd, puis dans Word, Fichier › Options › Compléments › Gérer :
+     Compléments COM › Atteindre… : cocher « Tableaux Word vers Excel ».
+
+AUTRES POSSIBILITÉS
+  - Ne pas appliquer la stratégie à ces utilisateurs (moins sûr).
+  - Signer avec un certificat interne diffusé par GPO dans les magasins
+    « Autorités de certification racines de confiance » et « Éditeurs approuvés ».

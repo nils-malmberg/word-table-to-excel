@@ -1,8 +1,9 @@
 name: Release
 
 # Publie une version : vérification complète sous Windows (tests, installation sans droits
-# administrateur depuis le dossier Installation/), puis création de la release GitHub avec le
-# paquet prêt à l'emploi WordTableToExcel-<tag>.zip.
+# administrateur depuis le dossier Installation/, application autonome), puis création de la
+# release GitHub avec l'application TableauxWordExcel.exe (téléchargeable seule) et le paquet
+# complet WordTableToExcel-<tag>.zip (complément + application).
 # Déclenchement : poussée d'un tag « v* », ou manuellement (onglet Actions) en indiquant le tag.
 
 on:
@@ -35,6 +36,10 @@ jobs:
         shell: powershell
         run: ./tests/ci/com-smoke-test.ps1 -Folder Installation
 
+      - name: Application autonome (Application/TableauxWordExcel.exe)
+        shell: powershell
+        run: ./tests/ci/app-selftest.ps1 -Exe Application/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx -Output app-selftest
+
   publish:
     name: Publication de la release
     needs: verify
@@ -49,6 +54,9 @@ jobs:
           DIR="WordTableToExcel-$TAG"
           mkdir -p "out/$DIR"
           cp Installation/* "out/$DIR/"
+          mkdir -p "out/$DIR/Application"
+          cp Application/* "out/$DIR/Application/"
+          cp Application/TableauxWordExcel.exe .
           cp tests/fixtures/rapport_test_complexe.docx "out/$DIR/Exemple - rapport de test.docx"
           (cd out && zip -r -X "../$DIR.zip" "$DIR")
           unzip -l "$DIR.zip"
@@ -59,7 +67,7 @@ jobs:
         run: |
           NOTES=".github/release-notes/$TAG.md"
           if [ -f "$NOTES" ]; then NOTE_ARGS=(--notes-file "$NOTES"); else NOTE_ARGS=(--generate-notes); fi
-          gh release create "$TAG" "WordTableToExcel-$TAG.zip" \
-            --title "Tableaux Word vers Excel $TAG" \
+          gh release create "$TAG" "TableauxWordExcel.exe" "WordTableToExcel-$TAG.zip" \
+            --title "Tableaux Word ↔ Excel $TAG" \
             --target "${{ github.sha }}" \
             "${NOTE_ARGS[@]}"

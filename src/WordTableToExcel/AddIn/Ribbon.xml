@@ -4,7 +4,7 @@
   <ribbon>
     <tabs>
       <tab idMso="TabHome">
-        <group id="wtteGroupHome" label="Export Excel">
+        <group id="wtteGroupHome" label="Excel">
           <button id="wtteExportHome"
                   label="Tableaux vers Excel"
                   size="large"
@@ -13,10 +13,18 @@
                   supertip="Crée un classeur Excel avec une feuille par tableau du document (tous les tableaux, ou seulement ceux qui ont une légende), en conservant la mise en forme. Le document Word n'est pas modifié."
                   keytip="XT"
                   onAction="OnExportClick" />
+          <button id="wtteImportHome"
+                  label="Importer depuis Excel"
+                  size="large"
+                  imageMso="ImportExcel"
+                  screentip="Importer des tableaux depuis Excel"
+                  supertip="Insère à l'emplacement du curseur un tableau par feuille d'un classeur Excel, avec sa mise en forme et les valeurs telles qu'Excel les affiche, et au besoin une légende numérotée à compléter."
+                  keytip="XI"
+                  onAction="OnImportClick" />
         </group>
       </tab>
       <tab idMso="TabReferences">
-        <group id="wtteGroupReferences" label="Export Excel">
+        <group id="wtteGroupReferences" label="Excel">
           <button id="wtteExportReferences"
                   label="Tableaux vers Excel"
                   size="large"
@@ -24,6 +32,13 @@
                   screentip="Exporter les tableaux vers Excel"
                   supertip="Exporte les tableaux légendés (ou tous les tableaux) vers un classeur Excel, une feuille par tableau."
                   onAction="OnExportClick" />
+          <button id="wtteImportReferences"
+                  label="Importer depuis Excel"
+                  size="large"
+                  imageMso="ImportExcel"
+                  screentip="Importer des tableaux depuis Excel"
+                  supertip="Insère un tableau par feuille d'un classeur Excel, avec une légende numérotée « Tableau N » à compléter."
+                  onAction="OnImportClick" />
         </group>
       </tab>
     </tabs>

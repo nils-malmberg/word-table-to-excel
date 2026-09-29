@@ -6,16 +6,19 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 using WordTableToExcel.AddIn.Interop;
 using WordTableToExcel.Export;
+using WordTableToExcel.Import;
 using WordTableToExcel.Infrastructure;
 using WordTableToExcel.UI;
+using WordTableToExcel.Word;
 
 namespace WordTableToExcel.AddIn
 {
     /// <summary>
     /// Point d'entrée du complément COM chargé par Word.
     /// <list type="bullet">
-    /// <item>Word 2007 et suivants : bouton « Tableaux vers Excel » dans le ruban (onglets Accueil et Références) ;</item>
-    /// <item>Word 2000 à 2003 : bouton dans la barre d'outils Standard.</item>
+    /// <item>Word 2007 et suivants : boutons « Tableaux vers Excel » et « Importer depuis Excel » dans le ruban
+    /// (onglets Accueil et Références) ;</item>
+    /// <item>Word 2000 à 2003 : boutons dans la barre d'outils Standard.</item>
     /// </list>
     /// Toute exception est interceptée : une erreur de l'extension ne doit jamais faire planter Word
     /// ni conduire Word à désactiver le complément.
@@ -29,7 +32,7 @@ namespace WordTableToExcel.AddIn
         public const string ClassId = "03F63233-F2FE-4A75-AF7A-F99CBEDC8030";
         public const string ProgIdValue = "WordTableToExcel.Connect";
         public const string FriendlyName = "Tableaux Word vers Excel";
-        public const string Description = "Exporte les tableaux du document (avec ou sans légende) vers un classeur Excel, en conservant la mise en forme.";
+        public const string Description = "Exporte les tableaux du document vers un classeur Excel et importe des tableaux Excel dans le document, en conservant la mise en forme.";
 
         private object _application;
         private LegacyToolbar _legacyToolbar;
@@ -43,7 +46,7 @@ namespace WordTableToExcel.AddIn
             try
             {
                 _application = Application;
-                Log.Info("Connexion à Word " + WordVersion(Application) + " (" + ConnectMode + "), .NET " + Environment.Version + ", " + (IntPtr.Size * 8) + " bits.");
+                Log.Info("Connexion à Word " + WordCom.WordVersion(Application) + " ("+ ConnectMode + "), .NET " + Environment.Version + ", " + (IntPtr.Size * 8) + " bits.");
                 if (ConnectMode != ext_ConnectMode.ext_cm_Startup) SetupLegacyToolbar();
             }
             catch (Exception ex)
@@ -116,6 +119,12 @@ namespace WordTableToExcel.AddIn
             RunExport();
         }
 
+        /// <summary>Rappel du bouton « Importer depuis Excel » du ruban.</summary>
+        public void OnImportClick(IRibbonControl control)
+        {
+            RunImport();
+        }
+
         // ------------------------------------------------------------------ Export
 
         internal void RunExport()
@@ -131,6 +140,28 @@ namespace WordTableToExcel.AddIn
             {
                 var inner = ex is ExportFailedException && ex.InnerException != null ? ex.InnerException : ex;
                 Messages.Error(WindowOwner.FromWord(_application), "L'export des tableaux a échoué.", inner);
+            }
+            finally
+            {
+                _busy = false;
+            }
+        }
+
+        // ------------------------------------------------------------------ Import
+
+        internal void RunImport()
+        {
+            if (_busy) return;
+            _busy = true;
+            try
+            {
+                EnableVisualStyles();
+                new ImportService(_application).Run();
+            }
+            catch (Exception ex)
+            {
+                var inner = ex is ExportFailedException && ex.InnerException != null ? ex.InnerException : ex;
+                Messages.Error(WindowOwner.FromWord(_application), "L'import du classeur Excel a échoué.\nSi des tableaux ont déjà été insérés, Ctrl+Z (Annuler) les retire.", inner, false);
             }
             finally
             {
@@ -155,28 +186,8 @@ namespace WordTableToExcel.AddIn
         private void SetupLegacyToolbar()
         {
             if (_legacyToolbar != null || _application == null) return;
-            if (WordMajorVersion(_application) >= 12) return; // le ruban est utilisé
-            _legacyToolbar = LegacyToolbar.Create(_application, RunExport);
-        }
-
-        internal static string WordVersion(object application)
-        {
-            try
-            {
-                return Convert.ToString(((dynamic)application).Version);
-            }
-            catch (Exception)
-            {
-                return "?";
-            }
-        }
-
-        internal static int WordMajorVersion(object application)
-        {
-            string version = WordVersion(application);
-            int dot = version.IndexOf('.');
-            int major;
-            return int.TryParse(dot > 0 ? version.Substring(0, dot) : version, out major) ? major : 0;
+            if (WordCom.WordMajorVersion(_application) >= 12) return; // le ruban est utilisé
+            _legacyToolbar = LegacyToolbar.Create(_application, RunExport, RunImport);
         }
 
         // ------------------------------------------------------------------ Enregistrement (regasm)

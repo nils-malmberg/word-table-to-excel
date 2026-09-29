@@ -37,10 +37,49 @@ jobs:
       - name: Compilation du complément (.NET Framework 4.0, AnyCPU)
         run: dotnet build src/WordTableToExcel -c Release
 
+      # Word charge le complément dans le .NET Framework : on y vérifie l'import (valeurs affichées, XML Word).
+      - name: Import Excel vérifié sur .NET Framework (Windows PowerShell)
+        shell: powershell
+        run: ./tests/ci/framework-check.ps1 -Dll src/WordTableToExcel/bin/Release/net40/WordTableToExcel.dll -Fixture tests/fixtures/import_complexe.xlsx
+
       # Le dossier Installation/ du dépôt est ce que l'utilisateur obtient en extrayant le .zip de GitHub.
       - name: Installation depuis le dossier Installation/ du dépôt (sans droits administrateur)
         shell: powershell
         run: ./tests/ci/com-smoke-test.ps1 -Folder Installation
+
+      # Postes d'entreprise : DLL signées (certificat de test) et règles « compléments signés » de Word.
+      - name: Signature des DLL et détection des règles de sécurité de Word
+        shell: powershell
+        run: ./tests/ci/enterprise-check.ps1 -Folder Installation
+
+      # Application autonome : un seul .exe qui pilote Word de l'extérieur (aucun complément chargé dans Word).
+      - name: Compilation de l'application autonome (TableauxWordExcel.exe)
+        run: dotnet build src/TableauxWordExcel -c Release
+
+      - name: Import Excel vérifié dans l'application (.NET Framework)
+        shell: powershell
+        run: ./tests/ci/framework-check.ps1 -Dll src/TableauxWordExcel/bin/Release/net40/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx
+
+      - name: Autotest et démarrage de l'application compilée
+        shell: powershell
+        run: ./tests/ci/app-selftest.ps1 -Exe src/TableauxWordExcel/bin/Release/net40/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx -Output app-selftest/compilee -PrintScreenshots
+
+      # Le dossier Application/ du dépôt contient l'exécutable que l'utilisateur télécharge.
+      - name: Autotest de l'exécutable du dépôt (Application/)
+        shell: powershell
+        run: ./tests/ci/app-selftest.ps1 -Exe Application/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx -Output app-selftest/depot
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Application
+          path: |
+            src/TableauxWordExcel/bin/Release/net40/TableauxWordExcel.exe
+            Application/LISEZMOI.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Captures-application
+          path: app-selftest
 
       - uses: actions/download-artifact@v4
         with:
@@ -51,7 +90,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist/Installation | Out-Null
-          Copy-Item Installation/*.cmd, Installation/LISEZMOI.txt dist/Installation/
+          Copy-Item Installation/*.cmd, Installation/*.txt, Installation/*.ps1 dist/Installation/
           Copy-Item src/WordTableToExcel/bin/Release/net40/WordTableToExcel.dll dist/Installation/
           Copy-Item shim-out/*.dll dist/Installation/
 

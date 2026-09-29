@@ -1,6 +1,6 @@
 @echo off
 rem Maintenance du projet uniquement (les utilisateurs n ont rien a compiler).
-rem Execute les tests, compile WordTableToExcel.dll et la copie dans le dossier Installation.
+rem Execute les tests, compile WordTableToExcel.dll (dossier Installation) et TableauxWordExcel.exe (dossier Application).
 rem Les chargeurs natifs (Shim32/Shim64) se recompilent avec build\build-shim.sh (MinGW-w64).
 rem Necessite le SDK .NET 8 : https://dotnet.microsoft.com/download
 setlocal
@@ -15,5 +15,8 @@ if errorlevel 1 exit /b 1
 dotnet build src\WordTableToExcel -c Release
 if errorlevel 1 exit /b 1
 copy /y src\WordTableToExcel\bin\Release\net40\WordTableToExcel.dll Installation\ >nul
+dotnet build src\TableauxWordExcel -c Release
+if errorlevel 1 exit /b 1
+copy /y src\TableauxWordExcel\bin\Release\net40\TableauxWordExcel.exe Application\ >nul
 echo.
-echo Dossier Installation mis a jour.
+echo Dossiers Installation et Application mis a jour.

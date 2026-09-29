@@ -85,17 +85,70 @@ if defined IS64 (
 rem --- 4. Declaration du complement aupres de Word (toutes versions) ---------
 set "ADDIN=HKCU\Software\Microsoft\Office\Word\Addins\%PROGID%"
 reg add "%ADDIN%" /v FriendlyName /t REG_SZ /d "%NAME%" /f >nul || goto :failed
-reg add "%ADDIN%" /v Description /t REG_SZ /d "Exporte les tableaux du document vers un classeur Excel (une feuille par tableau), avec leur mise en forme." /f >nul || goto :failed
+reg add "%ADDIN%" /v Description /t REG_SZ /d "Exporte les tableaux du document vers Excel et importe des tableaux Excel dans le document, avec leur mise en forme." /f >nul || goto :failed
 reg add "%ADDIN%" /v LoadBehavior /t REG_DWORD /d 3 /f >nul || goto :failed
 rem Office 2013 et suivants : ne pas desactiver le complement pour lenteur au demarrage.
 for %%V in (15.0 16.0) do reg add "HKCU\Software\Microsoft\Office\%%V\Word\Resiliency\DoNotDisableAddinList" /v %PROGID% /t REG_DWORD /d 1 /f >nul 2>&1
 
 echo  Complement enregistre pour Word.
+
+rem --- 5. Regles de securite de Word qui empecheraient le chargement ---------
+rem "Exiger que les complements soient signes par un editeur approuve" (requireaddinsig)
+rem ou "Desactiver tous les complements d'application" (disablealladdins) : Word refuse
+rem alors le complement et indique "L'utilisateur a choisi de desactiver les macros".
+set "POLICY_BLOCK="
+set "USER_BLOCK="
+for %%V in (12.0 14.0 15.0 16.0) do (
+  for %%N in (requireaddinsig disablealladdins) do (
+    call :isset "HKCU\Software\Policies\Microsoft\Office\%%V\Word\Security" %%N && set "POLICY_BLOCK=1"
+    call :isset "HKLM\Software\Policies\Microsoft\Office\%%V\Word\Security" %%N && set "POLICY_BLOCK=1"
+    call :isset "HKCU\Software\Microsoft\Office\%%V\Word\Security" %%N && set "USER_BLOCK=1"
+  )
+)
+if defined POLICY_BLOCK goto :policyblock
+if defined USER_BLOCK goto :userblock
+
 echo.
 echo  =======================================================================
 echo   Installation terminee.
-echo   Ouvrez Word : le bouton "Tableaux vers Excel" se trouve a droite des
-echo   onglets Accueil et References (Word 2000-2003 : barre d'outils Standard).
+echo   Ouvrez Word : les boutons "Tableaux vers Excel" et "Importer depuis
+echo   Excel" se trouvent a droite des onglets Accueil et References, groupe
+echo   "Excel" (Word 2000-2003 : barre d'outils Standard).
+echo  =======================================================================
+echo.
+if not defined WTTE_NO_PAUSE pause
+exit /b 0
+
+:policyblock
+echo.
+echo  =======================================================================
+echo   Installation terminee, MAIS votre organisation impose a Word une regle
+echo   de securite : seuls les complements SIGNES par un editeur approuve par
+echo   votre service informatique peuvent se charger. Word n'affichera pas les
+echo   boutons et indiquera "Non charge. L'utilisateur a choisi de desactiver
+echo   les macros".
+echo.
+echo   Ce reglage ne peut pas etre modifie depuis ce poste. Transmettez a votre
+echo   service informatique le fichier INFORMATIQUE.txt de ce dossier : il
+echo   explique comment signer le complement ^(quelques minutes^).
+echo  =======================================================================
+echo.
+if not defined WTTE_NO_PAUSE pause
+exit /b 0
+
+:userblock
+echo.
+echo  =======================================================================
+echo   Installation terminee, MAIS Word est regle pour refuser les complements
+echo   non signes ^(il indiquerait "L'utilisateur a choisi de desactiver les
+echo   macros"^). Pour l'autoriser, dans Word :
+echo     Fichier ^> Options ^> Centre de gestion de la confidentialite ^>
+echo     Parametres du Centre de gestion de la confidentialite ^> Complements
+echo   decochez "Exiger que les complements d'application soient signes par un
+echo   editeur approuve" et "Desactiver tous les complements d'application",
+echo   puis redemarrez Word.
+echo   Si ces cases sont grisees, voyez INFORMATIQUE.txt avec votre service
+echo   informatique.
 echo  =======================================================================
 echo.
 if not defined WTTE_NO_PAUSE pause
@@ -108,6 +161,13 @@ echo  verifiez le message ci-dessus, puis relancez install.cmd.
 echo.
 if not defined WTTE_NO_PAUSE pause
 exit /b 1
+
+rem ---------------------------------------------------------------------------
+rem  :isset <cle> <valeur> : code 0 si la valeur DWORD existe et vaut 1
+rem ---------------------------------------------------------------------------
+:isset
+reg query "%~1" /v %2 2>nul | findstr /R /I /C:"REG_DWORD *0x1$" >nul
+exit /b %errorlevel%
 
 rem ---------------------------------------------------------------------------
 rem  :register <option de vue du registre> <chemin du chargeur>

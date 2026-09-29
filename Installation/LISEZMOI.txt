@@ -8,8 +8,9 @@ INSTALLER
   2. Double-cliquez sur « install.cmd ».
      (Si Windows affiche « Windows a protégé votre ordinateur », cliquez sur
       « Informations complémentaires » puis « Exécuter quand même ».)
-  3. Ouvrez Word : le bouton « Tableaux vers Excel » se trouve à droite des
-     onglets Accueil et Références (Word 2000-2003 : barre d'outils Standard).
+  3. Ouvrez Word : les boutons « Tableaux vers Excel » et « Importer depuis Excel »
+     se trouvent à droite des onglets Accueil et Références (groupe « Excel » ;
+     Word 2000-2003 : barre d'outils Standard).
 
 UTILISER
   Cliquez sur « Tableaux vers Excel », choisissez :
@@ -17,6 +18,26 @@ UTILISER
     B - tous les tableaux (ceux sans légende deviennent Tableau_1, Tableau_2...).
   Puis choisissez où enregistrer le fichier Excel. Une feuille est créée par tableau,
   avec sa mise en forme. Le document Word n'est jamais modifié.
+
+  Cliquez sur « Importer depuis Excel » pour faire l'inverse : placez le curseur
+  dans le document, choisissez un classeur, cochez les feuilles voulues (un tableau
+  par feuille). Les valeurs apparaissent telles qu'Excel les affiche (nombres,
+  dates, monnaies, pourcentages) avec leur mise en forme. Option : une légende
+  « Tableau N : ... » est ajoutée ; sans texte, « [Titre du tableau] » est
+  surligné en jaune, à compléter. Ctrl+Z annule tout l'import.
+
+SI LES BOUTONS N'APPARAISSENT PAS (PC PROFESSIONNEL)
+  Si Word indique « Non chargé. L'utilisateur a choisi de désactiver les macros »,
+  il n'accepte que les compléments signés (install.cmd le signale) :
+    - cases modifiables : Fichier > Options > Centre de gestion de la
+      confidentialité > Paramètres... > Compléments : décochez « Exiger que les
+      compléments d'application soient signés... » et « Désactiver tous les
+      compléments d'application », puis redémarrez Word ;
+    - cases grisées (règle de l'entreprise) : transmettez INFORMATIQUE.txt à
+      votre service informatique, qui peut signer le complément.
+  Sans passer par le service informatique : utilisez plutôt l'application
+  TableauxWordExcel.exe (dossier Application), qui n'est pas un complément et
+  offre les mêmes fonctions.
 
 DÉSINSTALLER
   Fermez Word, puis double-cliquez sur « uninstall.cmd ».
@@ -26,6 +47,8 @@ CONTENU DU DOSSIER
   WordTableToExcel.Shim32.dll   chargeur pour Office 32 bits
   WordTableToExcel.Shim64.dll   chargeur pour Office 64 bits
   install.cmd / uninstall.cmd   installation / désinstallation (utilisateur courant)
+  INFORMATIQUE.txt              note pour le service informatique (signature)
+  signer-les-dll.ps1            script de signature (service informatique)
 
 Les fichiers sont copiés dans %LOCALAPPDATA%\WordTableToExcel.
 En cas de problème : %LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log

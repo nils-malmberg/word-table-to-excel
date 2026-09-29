@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 using WordTableToExcel.AddIn.Interop;
@@ -7,71 +8,96 @@ using WordTableToExcel.Infrastructure;
 namespace WordTableToExcel.AddIn
 {
     /// <summary>
-    /// Bouton « Tableaux → Excel » dans la barre d'outils Standard de Word 2000, 2002 (XP) et 2003,
-    /// qui n'ont pas de ruban. Le modèle Normal n'est pas marqué comme modifié.
+    /// Boutons « Tableaux → Excel » et « Excel → Tableaux » dans la barre d'outils Standard de Word 2000,
+    /// 2002 (XP) et 2003, qui n'ont pas de ruban. Le modèle Normal n'est pas marqué comme modifié.
     /// </summary>
     internal sealed class LegacyToolbar : IDisposable
     {
-        private const string Tag = "WordTableToExcel.Export";
+        private const string ExportTag = "WordTableToExcel.Export";
+        private const string ImportTag = "WordTableToExcel.Import";
+        private static readonly string[] Tags = { ExportTag, ImportTag };
+
+        private sealed class ButtonHandle
+        {
+            public object Button;
+            public IConnectionPoint ConnectionPoint;
+            public int Cookie;
+        }
 
         private readonly object _application;
-        private object _button;
-        private IConnectionPoint _connectionPoint;
-        private int _cookie;
+        private readonly List<ButtonHandle> _buttons = new List<ButtonHandle>();
 
         private LegacyToolbar(object application)
         {
             _application = application;
         }
 
-        public static LegacyToolbar Create(object application, Action onClick)
+        public static LegacyToolbar Create(object application, Action onExport, Action onImport)
         {
             var toolbar = new LegacyToolbar(application);
             try
             {
-                toolbar.Install(onClick);
+                toolbar.Install(onExport, onImport);
             }
             catch (Exception ex)
             {
-                Log.Error("Création du bouton de barre d'outils", ex);
+                Log.Error("Création des boutons de barre d'outils", ex);
             }
             return toolbar;
         }
 
-        private void Install(Action onClick)
+        private void Install(Action onExport, Action onImport)
         {
             dynamic app = _application;
+            object export = null, import = null;
             WithNormalTemplateUntouched(() =>
             {
                 RemoveExistingButtons(app);
                 dynamic bar = app.CommandBars.Item("Standard");
-                dynamic button = bar.Controls.Add(Type: 1, Temporary: true); // msoControlButton
-                button.Caption = "Tableaux → Excel";
-                button.Style = 2; // msoButtonCaption
-                button.Tag = Tag;
-                button.TooltipText = "Exporter les tableaux du document vers Excel";
-                button.BeginGroup = true;
-                button.OnAction = "!<" + Connect.ProgIdValue + ">";
-                _button = button;
+                export = AddButton(bar, "Tableaux → Excel", "Exporter les tableaux du document vers Excel", ExportTag, true);
+                import = AddButton(bar, "Excel → Tableaux", "Importer des tableaux depuis un classeur Excel", ImportTag, false);
             });
+            Connect(export, onExport);
+            Connect(import, onImport);
+        }
 
-            var container = (IConnectionPointContainer)_button;
+        private static object AddButton(dynamic bar, string caption, string tooltip, string tag, bool beginGroup)
+        {
+            dynamic button = bar.Controls.Add(Type: 1, Temporary: true); // msoControlButton
+            button.Caption = caption;
+            button.Style = 2; // msoButtonCaption
+            button.Tag = tag; // les événements Click sont distribués par étiquette
+            button.TooltipText = tooltip;
+            button.BeginGroup = beginGroup;
+            button.OnAction = "!<" + AddIn.Connect.ProgIdValue + ">";
+            return button;
+        }
+
+        private void Connect(object button, Action onClick)
+        {
+            if (button == null) return;
+            var handle = new ButtonHandle { Button = button };
+            var container = (IConnectionPointContainer)button;
             Guid iid = typeof(CommandBarButtonEvents).GUID;
-            container.FindConnectionPoint(ref iid, out _connectionPoint);
-            _connectionPoint.Advise(new ButtonEventSink(onClick), out _cookie);
+            container.FindConnectionPoint(ref iid, out handle.ConnectionPoint);
+            handle.ConnectionPoint.Advise(new ButtonEventSink(onClick), out handle.Cookie);
+            _buttons.Add(handle);
         }
 
         public void Dispose()
         {
-            try
+            foreach (var handle in _buttons)
             {
-                if (_connectionPoint != null && _cookie != 0) _connectionPoint.Unadvise(_cookie);
+                try
+                {
+                    if (handle.ConnectionPoint != null && handle.Cookie != 0) handle.ConnectionPoint.Unadvise(handle.Cookie);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Déconnexion d'un bouton", ex);
+                }
             }
-            catch (Exception ex)
-            {
-                Log.Error("Déconnexion du bouton", ex);
-            }
-            _connectionPoint = null;
+            _buttons.Clear();
 
             try
             {
@@ -80,18 +106,20 @@ namespace WordTableToExcel.AddIn
             }
             catch (Exception ex)
             {
-                Log.Error("Suppression du bouton", ex);
+                Log.Error("Suppression des boutons", ex);
             }
-            _button = null;
         }
 
         private static void RemoveExistingButtons(dynamic app)
         {
-            for (int guard = 0; guard < 20; guard++)
+            foreach (var tag in Tags)
             {
-                dynamic existing = app.CommandBars.FindControl(Tag: Tag);
-                if (existing == null) return;
-                existing.Delete();
+                for (int guard = 0; guard < 20; guard++)
+                {
+                    dynamic existing = app.CommandBars.FindControl(Tag: tag);
+                    if (existing == null) break;
+                    existing.Delete();
+                }
             }
         }
 

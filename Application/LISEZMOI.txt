@@ -1,0 +1,58 @@
+﻿TABLEAUX WORD ↔ EXCEL - application pour Windows
+================================================
+
+Un seul fichier : TableauxWordExcel.exe. Aucune installation, aucun droit
+administrateur, aucun complément dans Word : l'application pilote Word de
+l'extérieur. Elle fonctionne donc aussi sur les PC professionnels où Word
+bloque les compléments.
+
+LANCER
+  Double-cliquez sur TableauxWordExcel.exe (vous pouvez le ranger où vous
+  voulez, par exemple dans Documents, et l'épingler à la barre des tâches).
+  Au premier lancement, si Windows affiche « Windows a protégé votre
+  ordinateur », cliquez sur « Informations complémentaires » puis
+  « Exécuter quand même ». Si l'antivirus ou une règle de l'entreprise
+  bloque le programme, ne cherchez pas à contourner le blocage : demandez
+  à votre service informatique.
+
+EXPORTER LES TABLEAUX D'UN DOCUMENT WORD VERS EXCEL
+  1. Sélectionnez le document dans la liste (documents ouverts dans Word),
+     ou cliquez sur « Ajouter un fichier Word... » pour un document fermé
+     (il est ouvert en arrière-plan, en lecture seule, puis refermé).
+  2. Cliquez sur « Exporter vers Excel... », choisissez les tableaux :
+       A - uniquement ceux qui ont une légende (« Tableau 1 : ... ») ;
+       B - tous les tableaux.
+     La liste indique la page de début et de fin de chaque tableau : décochez
+     ceux à ne pas exporter (la case « Tout » les coche ou décoche tous).
+  3. Choisissez où enregistrer le classeur : une feuille par tableau, avec
+     sa mise en forme. Le document Word n'est jamais modifié.
+
+IMPORTER DES TABLEAUX EXCEL DANS WORD
+  1. Dans Word, cliquez à l'endroit où le tableau doit être inséré.
+  2. Dans l'application, vérifiez l'encadré (document, page, paragraphe),
+     puis cliquez sur « Importer depuis Excel... » (ou déposez le classeur
+     Excel sur la fenêtre).
+  3. Cochez les feuilles voulues (un tableau par feuille ; la case « Tout » en
+     haut de la liste les coche ou décoche toutes), la plage, le texte
+     de la légende et les options. Les valeurs apparaissent telles qu'Excel
+     les affiche (nombres, dates, monnaies, pourcentages) avec leur mise en
+     forme. Sans texte de légende, « [Titre du tableau] » est surligné en
+     jaune, à compléter. Dans Word, Ctrl+Z annule tout l'import.
+
+ASTUCES
+  - « Toujours visible » garde la fenêtre au-dessus de Word : pratique pour
+    cliquer dans Word puis dans l'application.
+  - Déposez des documents Word sur la fenêtre pour les ajouter à la liste.
+  - F5 actualise la liste (elle s'actualise aussi quand vous revenez dans
+    la fenêtre).
+  - Si Word a une boîte de dialogue ouverte, l'application ne peut pas lui
+    parler : fermez la boîte de dialogue puis recommencez.
+
+CE QUE L'APPLICATION ÉCRIT SUR LE PC
+  - Préférences : registre de l'utilisateur, HKCU\Software\WordTableToExcel.
+  - Journal de diagnostic : %LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log.
+  Pour tout supprimer : effacez TableauxWordExcel.exe, ce dossier et cette clé.
+
+Configuration : Windows 7 à 11, .NET Framework 4 (présent sur Windows 8 et
+suivants), Word 2007 ou plus récent. Excel n'est nécessaire que pour importer
+des .xls, .xlsb, .ods ou .csv (les .xlsx sont lus directement).
