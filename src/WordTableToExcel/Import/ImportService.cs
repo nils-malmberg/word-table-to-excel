@@ -390,7 +390,9 @@ namespace WordTableToExcel.Import
                     }
                     candidate.Range = range;
                     candidate.DetectedRange = range;
-                    candidate.Selected = info.IsVisible;
+                    // Cochée par défaut si visible et importable telle quelle (sinon l'utilisateur ajuste la plage).
+                    candidate.Selected = info.IsVisible && range.Value.ColumnCount <= SheetConverter.MaxWordColumns
+                        && (long)range.Value.RowCount * range.Value.ColumnCount <= SheetConverter.MaxCells;
                 }
                 catch (ExcelImportException ex)
                 {

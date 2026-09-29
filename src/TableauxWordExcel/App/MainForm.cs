@@ -108,7 +108,9 @@ namespace WordTableToExcel.App
                 TextAlign = ContentAlignment.MiddleCenter,
                 BackColor = SystemColors.Window,
                 ForeColor = SystemColors.GrayText,
+                BorderStyle = BorderStyle.FixedSingle,
                 Cursor = Cursors.Hand,
+                UseMnemonic = false,
                 Visible = false
             };
             _emptyList.Click += (s, e) => AddFilesFromDialog();
@@ -443,7 +445,9 @@ namespace WordTableToExcel.App
 
             _emptyList.Text = (_wordRunning ? "Aucun document n'est ouvert dans Word." : "Word n'est pas ouvert.")
                 + "\n\nOuvrez un document dans Word, ou cliquez ici pour choisir un fichier Word\n(vous pouvez aussi le déposer sur cette fenêtre).";
+            // L'un ou l'autre, jamais superposés.
             _emptyList.Visible = entries.Count == 0;
+            _documents.Visible = entries.Count > 0;
             UpdateButtons();
         }
 
