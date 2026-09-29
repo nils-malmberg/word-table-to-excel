@@ -150,7 +150,9 @@ complément pour l'utilisateur courant (`HKEY_CURRENT_USER`, Office 32 et 64 bit
    - **A — Uniquement les tableaux qui ont une légende**, ou
    - **B — Tous les tableaux du document**.
 
-   La liste montre les feuilles Excel qui seront créées, avec leur nom.
+   La liste montre les tableaux retenus par l'option choisie, avec leur **page de début et de fin** dans le
+   document et le nom de la feuille Excel créée pour chacun. **Décochez** les tableaux à ne pas exporter
+   (la case **Tout**, en tête de colonne, les coche ou les décoche tous), en option A comme en option B.
 4. Options :
    - *Écrire la légende complète en haut de chaque feuille* : la légende figure en A1 (utile car un nom
      de feuille Excel est limité à 31 caractères) et le tableau commence en ligne 3 ;
@@ -162,7 +164,7 @@ complément pour l'utilisateur courant (`HKEY_CURRENT_USER`, Office 32 et 64 bit
 6. Une fenêtre de progression s'affiche (l'export peut être annulé), puis un compte rendu propose
    d'ouvrir le classeur.
 
-Les choix sont mémorisés d'une fois sur l'autre.
+Les choix sont mémorisés d'une fois sur l'autre (sauf les tableaux décochés, propres à chaque document).
 
 ## Détection des légendes
 
@@ -466,7 +468,8 @@ Déroulement d'un export :
 
 1. **Détection** — pour chaque tableau, paragraphes voisins → légende candidate (`WordCaptionScanner`),
    puis attribution globale avec détection de la convention au-dessus/au-dessous (`CaptionAssigner`).
-2. **Choix** — boîte de dialogue A/B, aperçu des feuilles, fenêtre d'enregistrement.
+2. **Choix** — boîte de dialogue A/B, liste des tableaux à cocher (pages de début et de fin, feuille créée),
+   fenêtre d'enregistrement.
 3. **Structure** — le XML du tableau (`Range.WordOpenXML`, Word 2010+, ou `Range.XML`, Word 2003+) donne la
    grille exacte : `gridSpan`, `vMerge`, `gridBefore`, largeurs, hauteurs, trames et bordures, y compris
    celles du style de tableau et de ses zones conditionnelles. Sans XML (Word 2000/2002), la grille est

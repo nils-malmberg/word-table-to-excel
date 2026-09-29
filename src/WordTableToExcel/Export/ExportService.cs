@@ -80,18 +80,20 @@ namespace WordTableToExcel.Export
 
                 string documentName = WordCom.AsString(document.Name);
                 bool allTables, includeCaption, convertNumbers;
+                ICollection<int> excluded;
                 using (var dialog = new ExportDialog(documentName, tables, convention, settings.AllTables, settings.IncludeCaptionRow, settings.ConvertNumbers))
                 {
                     if (dialog.ShowDialog(owner) != DialogResult.OK) return;
                     allTables = dialog.AllTables;
                     includeCaption = dialog.IncludeCaptionRow;
                     convertNumbers = dialog.ConvertNumbers;
+                    excluded = dialog.ExcludedTables;
                 }
                 settings.AllTables = allTables;
                 settings.IncludeCaptionRow = includeCaption;
                 settings.ConvertNumbers = convertNumbers;
 
-                var plan = ExportPlan.Build(tables, allTables);
+                var plan = ExportPlan.Build(tables, allTables, excluded);
                 if (plan.Count == 0)
                 {
                     Messages.Info(owner, "Aucun tableau ne correspond au choix effectué.");
@@ -177,11 +179,13 @@ namespace WordTableToExcel.Export
 
             var scanner = new WordCaptionScanner(documentObject, new CaptionMatcher(labels), Log.Info);
             var contexts = new List<TableCaptionContext>();
+            var pages = new List<int[]>();
             int index = 0;
             foreach (dynamic table in document.Tables)
             {
                 index++;
                 contexts.Add(scanner.Scan((object)table, index));
+                pages.Add(Pages(documentObject, (object)table));
             }
             if (index != tableCount) Log.Info("Nombre de tableaux : " + tableCount + " annoncés, " + index + " parcourus.");
 
@@ -193,11 +197,42 @@ namespace WordTableToExcel.Export
                 {
                     Index = contexts[i].TableIndex,
                     Caption = assignments[i].Caption == null ? null : assignments[i].Caption.Text,
-                    CaptionPosition = assignments[i].Position
+                    CaptionPosition = assignments[i].Position,
+                    StartPage = pages[i][0],
+                    EndPage = pages[i][1]
                 });
             }
             Log.Info(string.Format("{0} tableau(x), {1} avec légende, convention : {2}.", entries.Count, entries.Count(e => e.HasCaption), convention));
             return entries;
+        }
+
+        /// <summary>Pages de début et de fin du tableau (0 si Word ne sait pas les donner, par exemple en mode Plan).</summary>
+        private static int[] Pages(object documentObject, object tableObject)
+        {
+            const int WdActiveEndPageNumber = 3;
+            var result = new int[2];
+            try
+            {
+                dynamic document = documentObject;
+                dynamic range = ((dynamic)tableObject).Range;
+                int start = WordCom.AsInt(range.Start);
+                int end = WordCom.AsInt(range.End);
+                result[0] = ValidPage(WordCom.AsInt(document.Range(start, start).Information(WdActiveEndPageNumber)));
+                // Dernier caractère du tableau (marque de fin de ligne) : la position End est déjà après le tableau.
+                int last = Math.Max(start, end - 1);
+                result[1] = ValidPage(WordCom.AsInt(document.Range(last, last).Information(WdActiveEndPageNumber)));
+                if (result[1] < result[0]) result[1] = result[0];
+            }
+            catch (Exception ex)
+            {
+                Log.Info("Pages du tableau inconnues : " + ex.Message);
+            }
+            return result;
+        }
+
+        private static int ValidPage(int page)
+        {
+            return page > 0 && !WordCom.IsUndefined(page) ? page : 0;
         }
 
         // ------------------------------------------------------------------ fichier cible

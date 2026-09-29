@@ -11,18 +11,32 @@ namespace WordTableToExcel.UI
 {
     /// <summary>
     /// Boîte de dialogue principale : choix entre l'option A (tableaux avec légende) et
-    /// l'option B (tous les tableaux), aperçu des feuilles qui seront créées, options.
+    /// l'option B (tous les tableaux), liste des tableaux proposés (cases à cocher, pages de début et de fin,
+    /// feuille Excel créée), options.
     /// </summary>
     internal sealed class ExportDialog : Form
     {
+        private const int ColumnExport = 0;
+        private const int ColumnIndex = 1;
+        private const int ColumnStartPage = 2;
+        private const int ColumnEndPage = 3;
+        private const int ColumnSheet = 4;
+        private const int ColumnCaption = 5;
+
         private readonly IList<TableEntry> _tables;
         private readonly RadioButton _captionedOnly;
         private readonly RadioButton _allTables;
         private readonly CheckBox _includeCaption;
         private readonly CheckBox _convertNumbers;
-        private readonly ListView _preview;
+        private readonly DataGridView _preview;
+        private readonly SelectAllHeader _selectAll;
         private readonly Button _exportButton;
         private readonly Label _previewTitle;
+        /// <summary>Tableaux décochés (rang dans le document), conservés quand on passe de A à B.</summary>
+        private readonly HashSet<int> _excluded = new HashSet<int>();
+        /// <summary>Tableau affiché sur chaque ligne de la liste.</summary>
+        private readonly List<TableEntry> _rowTables = new List<TableEntry>();
+        private bool _filling;
 
         public ExportDialog(string documentName, IList<TableEntry> tables, CaptionPosition convention, bool allTables, bool includeCaption, bool convertNumbers)
         {
@@ -41,7 +55,7 @@ namespace WordTableToExcel.UI
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
-            const int width = 540;
+            const int width = 640;
             // Une seule colonne, sans conteneur imbriqué redimensionné automatiquement :
             // mise en page stable quelle que soit la résolution (DPI) ou la police système.
             var root = new TableLayoutPanel
@@ -101,20 +115,17 @@ namespace WordTableToExcel.UI
             // --- Aperçu
             _previewTitle = Section(string.Empty);
             root.Controls.Add(_previewTitle);
-            _preview = new ListView
-            {
-                View = View.Details,
-                FullRowSelect = true,
-                HeaderStyle = ColumnHeaderStyle.Nonclickable,
-                MultiSelect = false,
-                HideSelection = true,
-                Size = new Size(width, 150),
-                Margin = new Padding(0, 2, 0, 0)
-            };
-            _preview.Columns.Add("N°", 40, System.Windows.Forms.HorizontalAlignment.Right);
-            _preview.Columns.Add("Feuille Excel", 215);
-            _preview.Columns.Add("Légende", width - 40 - 215 - 24);
+            _preview = BuildGrid(width);
+            _selectAll = new SelectAllHeader(_preview, ColumnExport, ColumnIndex, i => i < _rowTables.Count, i => true);
             root.Controls.Add(_preview);
+            root.Controls.Add(new Label
+            {
+                Text = "Décochez les tableaux à ne pas exporter (case « Tout » : tous à la fois). Les pages aident à les repérer dans le document.",
+                AutoSize = true,
+                MaximumSize = new Size(width, 0),
+                ForeColor = SystemColors.GrayText,
+                Margin = new Padding(0, 3, 0, 0)
+            });
 
             // --- Options
             root.Controls.Add(Section("Options"));
@@ -188,25 +199,121 @@ namespace WordTableToExcel.UI
             get { return _convertNumbers.Checked; }
         }
 
+        /// <summary>Rang des tableaux décochés par l'utilisateur.</summary>
+        public ICollection<int> ExcludedTables
+        {
+            get { return new HashSet<int>(_excluded); }
+        }
+
+        /// <summary>État de la case « Tout » (autotest).</summary>
+        internal CheckState SelectAllState()
+        {
+            return _selectAll.State;
+        }
+
+        /// <summary>Clic sur « Tout » (autotest).</summary>
+        internal void ToggleAll()
+        {
+            _selectAll.Toggle();
+        }
+
+        /// <summary>Coche ou décoche un tableau de la liste (autotest).</summary>
+        internal void SetTableChecked(int tableIndex, bool check)
+        {
+            int row = _rowTables.FindIndex(t => t.Index == tableIndex);
+            if (row >= 0) _preview.Rows[row].Cells[ColumnExport].Value = check;
+        }
+
+        private DataGridView BuildGrid(int width)
+        {
+            var grid = new DataGridView
+            {
+                Width = width,
+                Height = 190,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false,
+                RowHeadersVisible = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                MultiSelect = false,
+                BackgroundColor = SystemColors.Window,
+                AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None,
+                Margin = new Padding(0, 2, 0, 0)
+            };
+            grid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "Tout", Width = 58, ToolTipText = "Cocher ou décocher tous les tableaux" });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "N°", Width = 38, ReadOnly = true, DefaultCellStyle = { Alignment = DataGridViewContentAlignment.MiddleRight } });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Page début", Width = 74, ReadOnly = true, DefaultCellStyle = { Alignment = DataGridViewContentAlignment.MiddleCenter } });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Page fin", Width = 62, ReadOnly = true, DefaultCellStyle = { Alignment = DataGridViewContentAlignment.MiddleCenter } });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Feuille Excel", Width = 170, ReadOnly = true });
+            grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Légende", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, MinimumWidth = 120, ReadOnly = true });
+            foreach (DataGridViewColumn c in grid.Columns) c.SortMode = DataGridViewColumnSortMode.NotSortable;
+            grid.DataError += (s, e) => e.ThrowException = false;
+            grid.CellValueChanged += (s, e) =>
+            {
+                if (_filling || e.ColumnIndex != ColumnExport || e.RowIndex < 0 || e.RowIndex >= _rowTables.Count) return;
+                int index = _rowTables[e.RowIndex].Index;
+                if (_selectAll.IsChecked(e.RowIndex)) _excluded.Remove(index);
+                else _excluded.Add(index);
+                RefreshSheetNames();
+            };
+            return grid;
+        }
+
+        /// <summary>Liste des tableaux proposés par l'option choisie (A ou B), cochés sauf ceux décochés auparavant.</summary>
         private void RefreshPreview()
         {
-            var plan = ExportPlan.Build(_tables, AllTables);
-            _preview.BeginUpdate();
-            _preview.Items.Clear();
-            foreach (var sheet in plan)
+            _filling = true;
+            try
             {
-                var item = new ListViewItem(sheet.Table.Index.ToString(CultureInfo.CurrentCulture));
-                item.SubItems.Add(sheet.SheetName);
-                string caption = sheet.Table.HasCaption
-                    ? (sheet.Table.CaptionPosition == CaptionPosition.Below ? "↓ " : "↑ ") + sheet.Table.Caption
-                    : "(sans légende)";
-                item.SubItems.Add(caption);
-                if (!sheet.Table.HasCaption) item.ForeColor = SystemColors.GrayText;
-                _preview.Items.Add(item);
+                _preview.Rows.Clear();
+                _rowTables.Clear();
+                foreach (var table in _tables.Where(t => ExportPlan.IsCandidate(t, AllTables)))
+                {
+                    string caption = table.HasCaption
+                        ? (table.CaptionPosition == CaptionPosition.Below ? "↓ " : "↑ ") + table.Caption
+                        : "(sans légende)";
+                    int row = _preview.Rows.Add(!_excluded.Contains(table.Index), table.Index.ToString(CultureInfo.CurrentCulture),
+                        Page(table.StartPage), Page(table.EndPage), string.Empty, caption);
+                    if (!table.HasCaption) _preview.Rows[row].Cells[ColumnCaption].Style.ForeColor = SystemColors.GrayText;
+                    _rowTables.Add(table);
+                }
             }
-            _preview.EndUpdate();
+            finally
+            {
+                _filling = false;
+            }
+            RefreshSheetNames();
+        }
+
+        /// <summary>Nom de la feuille de chaque tableau coché (les noms tiennent compte des tableaux décochés).</summary>
+        private void RefreshSheetNames()
+        {
+            var plan = ExportPlan.Build(_tables, AllTables, _excluded);
+            var names = plan.ToDictionary(p => p.Table.Index, p => p.SheetName);
+            _filling = true;
+            try
+            {
+                for (int i = 0; i < _rowTables.Count; i++)
+                {
+                    string name;
+                    bool exported = names.TryGetValue(_rowTables[i].Index, out name);
+                    var cell = _preview.Rows[i].Cells[ColumnSheet];
+                    cell.Value = exported ? name : "(non exporté)";
+                    cell.Style.ForeColor = exported ? SystemColors.WindowText : SystemColors.GrayText;
+                }
+            }
+            finally
+            {
+                _filling = false;
+            }
+            _selectAll.Invalidate();
             _previewTitle.Text = string.Format(CultureInfo.CurrentCulture, "Feuilles Excel qui seront créées ({0})", plan.Count);
             _exportButton.Enabled = plan.Count > 0;
+        }
+
+        private static string Page(int page)
+        {
+            return page > 0 ? page.ToString(CultureInfo.CurrentCulture) : "\u2014";
         }
 
         private Label Section(string text)

@@ -4,7 +4,6 @@ using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
-using System.Windows.Forms.VisualStyles;
 using WordTableToExcel.Core.ExcelImport;
 using WordTableToExcel.Import;
 using WordTableToExcel.Infrastructure;
@@ -36,6 +35,7 @@ namespace WordTableToExcel.UI
 
         private readonly IList<ImportCandidate> _candidates;
         private readonly DataGridView _grid;
+        private readonly SelectAllHeader _selectAll;
         private readonly CheckBox _addCaption;
         private readonly ComboBox _captionPosition;
         private readonly CheckBox _fitToPage;
@@ -86,6 +86,7 @@ namespace WordTableToExcel.UI
             });
 
             _grid = BuildGrid(width);
+            _selectAll = new SelectAllHeader(_grid, ColumnImport, ColumnSheet, i => i < _candidates.Count && _candidates[i].CanImport, Eligible);
             root.Controls.Add(_grid);
             root.Controls.Add(new Label
             {
@@ -191,21 +192,7 @@ namespace WordTableToExcel.UI
                     grid.InvalidateCell(ColumnImport, -1);
                 }
             };
-            grid.CurrentCellDirtyStateChanged += (s, e) =>
-            {
-                // La case à cocher prend effet immédiatement.
-                if (grid.IsCurrentCellDirty && grid.CurrentCell is DataGridViewCheckBoxCell) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
-            };
             grid.DataError += (s, e) => e.ThrowException = false;
-            grid.CellValueChanged += (s, e) =>
-            {
-                if (e.ColumnIndex == ColumnImport) grid.InvalidateCell(ColumnImport, -1);
-            };
-            grid.CellPainting += PaintSelectAllHeader;
-            grid.ColumnHeaderMouseClick += (s, e) =>
-            {
-                if (e.ColumnIndex == ColumnImport && e.Button == MouseButtons.Left) ToggleAll();
-            };
             return grid;
         }
 
@@ -224,62 +211,16 @@ namespace WordTableToExcel.UI
             return columns <= SheetConverter.MaxWordColumns && (long)rows * columns <= SheetConverter.MaxCells;
         }
 
-        private bool IsChecked(int index)
-        {
-            return _candidates[index].CanImport && Convert.ToBoolean(_grid.Rows[index].Cells[ColumnImport].Value ?? false, CultureInfo.InvariantCulture);
-        }
-
         /// <summary>État de la case « Tout » : cochée si toutes les feuilles cochables le sont, partielle si certaines seulement.</summary>
         internal CheckState SelectAllState()
         {
-            if (_grid == null) return CheckState.Unchecked;
-            int eligible = 0, eligibleChecked = 0, anyChecked = 0;
-            for (int i = 0; i < _candidates.Count && i < _grid.Rows.Count; i++)
-            {
-                bool isChecked = IsChecked(i);
-                if (isChecked) anyChecked++;
-                if (!Eligible(i)) continue;
-                eligible++;
-                if (isChecked) eligibleChecked++;
-            }
-            if (anyChecked == 0) return CheckState.Unchecked;
-            return eligible > 0 && eligibleChecked == eligible ? CheckState.Checked : CheckState.Indeterminate;
+            return _selectAll.State;
         }
 
         /// <summary>Clic sur « Tout » : tout décocher si tout est coché, sinon cocher toutes les feuilles cochables.</summary>
         internal void ToggleAll()
         {
-            _grid.EndEdit();
-            // La cellule en cours d'édition garderait son ancienne valeur affichée.
-            if (_grid.CurrentCell != null && _grid.CurrentCell.ColumnIndex == ColumnImport)
-            {
-                _grid.CurrentCell = _grid.Rows[_grid.CurrentCell.RowIndex].Cells[ColumnSheet];
-            }
-            bool uncheck = SelectAllState() == CheckState.Checked;
-            for (int i = 0; i < _candidates.Count; i++)
-            {
-                if (!_candidates[i].CanImport) continue;
-                if (uncheck) _grid.Rows[i].Cells[ColumnImport].Value = false;
-                else if (Eligible(i)) _grid.Rows[i].Cells[ColumnImport].Value = true;
-            }
-            _grid.InvalidateCell(ColumnImport, -1);
-        }
-
-        private void PaintSelectAllHeader(object sender, DataGridViewCellPaintingEventArgs e)
-        {
-            if (e.RowIndex != -1 || e.ColumnIndex != ColumnImport) return;
-            e.PaintBackground(e.CellBounds, false);
-            var state = SelectAllState();
-            var glyphState = state == CheckState.Checked ? CheckBoxState.CheckedNormal
-                : state == CheckState.Indeterminate ? CheckBoxState.MixedNormal : CheckBoxState.UncheckedNormal;
-            Size glyph = CheckBoxRenderer.GetGlyphSize(e.Graphics, glyphState);
-            var location = new Point(e.CellBounds.Left + 6, e.CellBounds.Top + (e.CellBounds.Height - glyph.Height) / 2);
-            CheckBoxRenderer.DrawCheckBox(e.Graphics, location, glyphState);
-            int textLeft = location.X + glyph.Width + 4;
-            var textBounds = new Rectangle(textLeft, e.CellBounds.Top, Math.Max(0, e.CellBounds.Right - textLeft - 2), e.CellBounds.Height);
-            TextRenderer.DrawText(e.Graphics, "Tout", e.CellStyle.Font, textBounds, e.CellStyle.ForeColor,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            e.Handled = true;
+            _selectAll.Toggle();
         }
 
         private void FillGrid()

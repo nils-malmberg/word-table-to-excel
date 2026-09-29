@@ -442,6 +442,23 @@ namespace WordTableToExcel.Tests
             var plan = ExportPlan.Build(Entries(), true);
             Assert.Equal(new[] { "Tableau 1 - Ventes", "Tableau_2", "Tableau 1 - Ventes (2)", "Tableau_4" }, plan.Select(p => p.SheetName));
         }
+
+        [Fact]
+        public void UncheckedTablesAreNotExported_InBothOptions()
+        {
+            // Option B, tableaux 1 et 4 décochés : le second « Tableau 1 - Ventes » prend le nom libéré.
+            var plan = ExportPlan.Build(Entries(), true, new HashSet<int> { 1, 4 });
+            Assert.Equal(new[] { 2, 3 }, plan.Select(p => p.Table.Index));
+            Assert.Equal(new[] { "Tableau_2", "Tableau 1 - Ventes" }, plan.Select(p => p.SheetName));
+
+            // Option A : seuls les tableaux légendés, moins ceux décochés.
+            plan = ExportPlan.Build(Entries(), false, new HashSet<int> { 3 });
+            Assert.Equal(new[] { 1 }, plan.Select(p => p.Table.Index));
+
+            Assert.Empty(ExportPlan.Build(Entries(), false, new HashSet<int> { 1, 3 }));
+            Assert.True(ExportPlan.IsCandidate(new TableEntry { Index = 9 }, true));
+            Assert.False(ExportPlan.IsCandidate(new TableEntry { Index = 9 }, false));
+        }
     }
 
     public class WordColorTests

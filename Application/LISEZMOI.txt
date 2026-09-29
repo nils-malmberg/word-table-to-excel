@@ -22,6 +22,8 @@ EXPORTER LES TABLEAUX D'UN DOCUMENT WORD VERS EXCEL
   2. Cliquez sur « Exporter vers Excel... », choisissez les tableaux :
        A - uniquement ceux qui ont une légende (« Tableau 1 : ... ») ;
        B - tous les tableaux.
+     La liste indique la page de début et de fin de chaque tableau : décochez
+     ceux à ne pas exporter (la case « Tout » les coche ou décoche tous).
   3. Choisissez où enregistrer le classeur : une feuille par tableau, avec
      sa mise en forme. Le document Word n'est jamais modifié.
 

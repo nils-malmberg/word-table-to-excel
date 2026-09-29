@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using WordTableToExcel.Core.Captions;
@@ -92,14 +93,28 @@ namespace WordTableToExcel.App
                 {
                     var tables = new List<TableEntry>
                     {
-                        new TableEntry { Index = 1, Caption = "Tableau 1 : Ventes trimestrielles par région", CaptionPosition = CaptionPosition.Above },
-                        new TableEntry { Index = 2 },
-                        new TableEntry { Index = 3, Caption = "Tableau 2 : Effectifs", CaptionPosition = CaptionPosition.Above }
+                        new TableEntry { Index = 1, Caption = "Tableau 1 : Ventes trimestrielles par région", CaptionPosition = CaptionPosition.Above, StartPage = 3, EndPage = 4 },
+                        new TableEntry { Index = 2, StartPage = 4, EndPage = 4 },
+                        new TableEntry { Index = 3, Caption = "Tableau 2 : Effectifs", CaptionPosition = CaptionPosition.Above, StartPage = 7, EndPage = 7 }
                     };
-                    using (var dialog = new ExportDialog("Rapport annuel 2024.docx", tables, CaptionPosition.Above, false, true, false))
+                    using (var dialog = new ExportDialog("Rapport annuel 2024.docx", tables, CaptionPosition.Above, true, true, false))
                     {
                         ShowOffscreen(dialog);
                         Capture(dialog, Path.Combine(output, "export.png"));
+
+                        // « Tout » : tous décochés puis tous cochés ; un tableau décoché n'est pas exporté.
+                        dialog.ToggleAll();
+                        Application.DoEvents();
+                        if (dialog.SelectAllState() != CheckState.Unchecked || dialog.ExcludedTables.Count != 3) throw new InvalidOperationException("« Tout » n'a pas tout décoché.");
+                        dialog.ToggleAll();
+                        Application.DoEvents();
+                        if (dialog.SelectAllState() != CheckState.Checked || dialog.ExcludedTables.Count != 0) throw new InvalidOperationException("« Tout » n'a pas tout coché.");
+                        dialog.SetTableChecked(2, false);
+                        Application.DoEvents();
+                        var plan = ExportPlan.Build(tables, dialog.AllTables, dialog.ExcludedTables);
+                        if (plan.Count != 2 || plan.Any(p => p.Table.Index == 2)) throw new InvalidOperationException("Le tableau décoché serait exporté.");
+                        Capture(dialog, Path.Combine(output, "export-decoche.png"));
+                        report.AppendLine("       export : « Tout », puis tableau 2 décoché → " + plan.Count + " feuilles");
                         dialog.Close();
                     }
                 });
