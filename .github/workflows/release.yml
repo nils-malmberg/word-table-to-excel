@@ -68,6 +68,6 @@ jobs:
           NOTES=".github/release-notes/$TAG.md"
           if [ -f "$NOTES" ]; then NOTE_ARGS=(--notes-file "$NOTES"); else NOTE_ARGS=(--generate-notes); fi
           gh release create "$TAG" "TableauxWordExcel.exe" "WordTableToExcel-$TAG.zip" \
-            --title "Tableaux Word vers Excel $TAG" \
+            --title "Tableaux Word ↔ Excel $TAG" \
             --target "${{ github.sha }}" \
             "${NOTE_ARGS[@]}"
