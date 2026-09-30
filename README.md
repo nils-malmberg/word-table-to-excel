@@ -163,7 +163,10 @@ complément pour l'utilisateur courant (`HKEY_CURRENT_USER`, Office 32 et 64 bit
 5. Cliquez sur **Exporter…**, puis choisissez le dossier et le nom du fichier dans la fenêtre
    d'enregistrement Windows (par défaut : dossier du document, nom `<document> - tableaux.xlsx`).
 6. Une fenêtre de progression s'affiche (l'export peut être annulé), puis un compte rendu propose
-   d'ouvrir le classeur.
+   d'ouvrir le classeur. Tout ce qui manque dans le classeur y figure en premier, avec une icône
+   d'avertissement : « Attention : N tableau(x) non exporté(s) », puis les informations absentes des
+   tableaux exportés (images et objets, texte coupé à 32 767 caractères, limite d'une cellule Excel).
+   Les simples remarques suivent ; le détail complet est aussi écrit dans le journal.
 
 Les choix sont mémorisés d'une fois sur l'autre (sauf les tableaux décochés, propres à chaque document).
 
@@ -217,7 +220,10 @@ tronquée à 31 caractères, sans les caractères interdits par Excel (`\ / ? * 
 
 Limites connues :
 
-- les **images** et objets insérés dans les cellules ne sont pas copiés (seul le texte l'est) ;
+- les **images** et objets insérés dans les cellules (graphiques, formes, zones de texte, objets OLE) ne
+  sont pas copiés, seul le texte l'est ; le compte rendu indique combien chaque tableau en contient ;
+- une cellule Excel contient au plus 32 767 caractères : au-delà, le texte est coupé et le compte rendu
+  le signale ;
 - un **tableau imbriqué** dans une cellule est exporté sous forme de texte dans la cellule parente ;
 - seuls les tableaux du **corps du document** sont exportés (pas ceux des en-têtes, pieds de page
   ou zones de texte) ;

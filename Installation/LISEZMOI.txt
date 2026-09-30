@@ -19,7 +19,9 @@ UTILISER
   Puis choisissez où enregistrer le fichier Excel. Une feuille est créée par tableau,
   avec sa mise en forme. Le document Word n'est jamais modifié. Ce qui est supprimé
   en suivi des modifications (même non accepté : texte, lignes, tableaux entiers)
-  et les renvois vers les notes de bas de page ne sont pas exportés.
+  et les renvois vers les notes de bas de page ne sont pas exportés. Le compte rendu
+  final signale en premier tout ce qui manque dans le classeur (tableau non exporté,
+  images et objets, texte trop long coupé).
 
   Cliquez sur « Importer depuis Excel » pour faire l'inverse : placez le curseur
   dans le document, choisissez un classeur, cochez les feuilles voulues (un tableau

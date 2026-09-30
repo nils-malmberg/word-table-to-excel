@@ -23,6 +23,14 @@ namespace WordTableToExcel.Core.Text
         /// </summary>
         public static List<TextRun> Clean(IEnumerable<TextRun> runs)
         {
+            bool truncated;
+            return Clean(runs, out truncated);
+        }
+
+        /// <param name="truncated">Vrai si le texte dépassait la limite d'une cellule Excel et a été coupé.</param>
+        public static List<TextRun> Clean(IEnumerable<TextRun> runs, out bool truncated)
+        {
+            truncated = false;
             var result = new List<TextRun>();
             // Pile des champs ouverts : true = on est dans le code du champ (invisible).
             var fieldStack = new List<bool>();
@@ -74,6 +82,7 @@ namespace WordTableToExcel.Core.Text
                 string cleaned = sb.ToString();
                 if (total + cleaned.Length > ExcelMaxCellLength)
                 {
+                    truncated = true;
                     int keep = ExcelMaxCellLength - total;
                     if (keep <= 0) break;
                     if (keep < cleaned.Length && char.IsHighSurrogate(cleaned[keep - 1])) keep--;

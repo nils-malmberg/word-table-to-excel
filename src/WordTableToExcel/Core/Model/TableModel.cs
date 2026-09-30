@@ -37,6 +37,8 @@ namespace WordTableToExcel.Core.Model
 
         /// <summary>Remarques non bloquantes rencontrées lors de la lecture (affichées dans le rapport final).</summary>
         public readonly List<string> Warnings = new List<string>();
+        /// <summary>Informations du tableau absentes du classeur (images, texte coupé…) : signalées en tête du rapport final.</summary>
+        public readonly List<string> Omissions = new List<string>();
 
         public bool HasCaption
         {

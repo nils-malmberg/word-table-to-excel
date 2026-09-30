@@ -25,7 +25,9 @@ EXPORTER LES TABLEAUX D'UN DOCUMENT WORD VERS EXCEL
      La liste indique la page de début et de fin de chaque tableau : décochez
      ceux à ne pas exporter (la case « Tout » les coche ou décoche tous).
   3. Choisissez où enregistrer le classeur : une feuille par tableau, avec
-     sa mise en forme. Le document Word n'est jamais modifié.
+     sa mise en forme. Le document Word n'est jamais modifié. Le compte
+     rendu final signale en premier tout ce qui manque dans le classeur
+     (tableau non exporté, images et objets, texte trop long coupé).
   Suivi des modifications : ce qui est supprimé (même si la suppression
   n'est pas encore acceptée) n'est pas exporté, qu'il s'agisse de texte,
   de lignes ou de tableaux entiers. Les renvois vers les notes de bas de

@@ -37,6 +37,25 @@ namespace WordTableToExcel.Core.Layout
         public static TableLayout Parse(string xml, Func<bool, string> themeFontFallback = null)
         {
             if (string.IsNullOrEmpty(xml)) return null;
+            bool skipped;
+            var layout = Parse(Load(xml, true, out skipped), themeFontFallback);
+            // Paquet inhabituel (tableau dans une partie écartée) : relecture complète, par sécurité.
+            if (layout == null && skipped) layout = Parse(Load(xml, false, out skipped), themeFontFallback);
+            return layout;
+        }
+
+        private const string PackageNamespace = "http://schemas.microsoft.com/office/2006/xmlPackage";
+
+        /// <summary>
+        /// Charge le XML fourni par Word. Avec <paramref name="usefulPartsOnly"/>, un paquet « Flat OPC »
+        /// (<c>Range.WordOpenXML</c>) est réduit aux parties lues ensuite (document, styles, thème) : les autres
+        /// (images en base64, polices, paramètres, notes, propriétés…), que Word joint à chaque tableau, sont sautées
+        /// sans être construites en mémoire.
+        /// </summary>
+        /// <param name="skipped">Vrai si au moins une partie a été écartée.</param>
+        internal static XDocument Load(string xml, bool usefulPartsOnly, out bool skipped)
+        {
+            skipped = false;
             var settings = new XmlReaderSettings
             {
                 DtdProcessing = DtdProcessing.Prohibit,
@@ -45,13 +64,46 @@ namespace WordTableToExcel.Core.Layout
                 IgnoreComments = true,
                 IgnoreProcessingInstructions = true
             };
-            XDocument document;
             using (var sr = new System.IO.StringReader(xml))
             using (var reader = XmlReader.Create(sr, settings))
             {
-                document = XDocument.Load(reader);
+                if (!usefulPartsOnly) return XDocument.Load(reader);
+                reader.MoveToContent();
+                if (reader.NodeType != XmlNodeType.Element || reader.LocalName != "package" || reader.NamespaceURI != PackageNamespace)
+                {
+                    return XDocument.Load(reader); // document seul (WordprocessingML 2003, tests…) : chargé tel quel
+                }
+
+                var package = new XElement(XName.Get(reader.LocalName, reader.NamespaceURI));
+                if (reader.IsEmptyElement) return new XDocument(package);
+                reader.Read();
+                while (!reader.EOF && reader.NodeType != XmlNodeType.EndElement)
+                {
+                    if (reader.NodeType != XmlNodeType.Element)
+                    {
+                        reader.Read();
+                        continue;
+                    }
+                    if (reader.LocalName == "part" && !IsUsefulPart(reader.GetAttribute("name", PackageNamespace), reader.GetAttribute("contentType", PackageNamespace)))
+                    {
+                        skipped = true;
+                        reader.Skip();
+                        continue;
+                    }
+                    package.Add(XNode.ReadFrom(reader)); // lit la partie et passe à la suivante
+                }
+                return new XDocument(package);
             }
-            return Parse(document, themeFontFallback);
+        }
+
+        /// <summary>Partie du paquet lue par l'analyse : document principal, styles, thème.</summary>
+        private static bool IsUsefulPart(string name, string contentType)
+        {
+            if (string.IsNullOrEmpty(name)) return true;
+            if (contentType != null && contentType.EndsWith(".main+xml", StringComparison.OrdinalIgnoreCase)) return true;
+            return string.Equals(name, "/word/document.xml", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "/word/styles.xml", StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("/word/theme/", StringComparison.OrdinalIgnoreCase);
         }
 
         public static TableLayout Parse(XDocument document, Func<bool, string> themeFontFallback = null)
@@ -74,7 +126,7 @@ namespace WordTableToExcel.Core.Layout
             var chain = styles.Chain(styleId);
             var look = TableLook.Parse(OoxmlXml.Child(tblPr, "tblLook"));
 
-            var layout = new TableLayout { HasCellFormatting = true };
+            var layout = new TableLayout { HasCellFormatting = true, ObjectCount = CountObjects(tbl) };
 
             // Grille déclarée.
             var gridWidths = new List<double>();
@@ -243,6 +295,38 @@ namespace WordTableToExcel.Core.Layout
                 layout.HasContent = false;
             }
             return layout;
+        }
+
+        /// <summary>
+        /// Images et objets du tableau (w:drawing, w:pict, w:object), tableaux imbriqués compris : chacun compté une
+        /// fois (pas sa représentation de secours mc:Fallback, ni les objets qu'il contient), hors contenu supprimé en
+        /// suivi des modifications.
+        /// </summary>
+        internal static int CountObjects(XElement tbl)
+        {
+            int count = 0;
+            foreach (var e in tbl.Descendants())
+            {
+                if (!IsObject(e)) continue;
+                bool counted = true;
+                foreach (var ancestor in e.Ancestors())
+                {
+                    if (ancestor == tbl) break;
+                    if (IsObject(ancestor) || OoxmlXml.Is(ancestor, "Fallback") || OoxmlXml.Is(ancestor, "del") || OoxmlXml.Is(ancestor, "moveFrom")
+                        || (OoxmlXml.Is(ancestor, "tr") && IsDeletedRow(ancestor)))
+                    {
+                        counted = false;
+                        break;
+                    }
+                }
+                if (counted) count++;
+            }
+            return count;
+        }
+
+        private static bool IsObject(XElement e)
+        {
+            return OoxmlXml.Is(e, "drawing") || OoxmlXml.Is(e, "pict") || OoxmlXml.Is(e, "object");
         }
 
         /// <summary>Ligne supprimée en suivi des modifications (w:trPr/w:del), acceptée ou non.</summary>

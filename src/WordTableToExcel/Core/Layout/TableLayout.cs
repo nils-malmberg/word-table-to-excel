@@ -77,6 +77,8 @@ namespace WordTableToExcel.Core.Layout
         /// supprimé en suivi des modifications, avec ou sans le texte masqué.
         /// </summary>
         public readonly List<string> XmlTextVariants = new List<string>();
+        /// <summary>Images et objets (dessins, formes, zones de texte, objets OLE) du tableau : non exportés.</summary>
+        public int ObjectCount;
 
         /// <summary>Cellules visibles qui commencent sur la ligne Word donnée, dans l'ordre.</summary>
         public List<LayoutCell> CellsStartingOnSourceRow(int sourceRow)

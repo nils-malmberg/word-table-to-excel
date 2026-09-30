@@ -22,6 +22,9 @@ namespace WordTableToExcel.Export
     /// </summary>
     internal sealed class ExportService
     {
+        /// <summary>Tableaux lus dans leur XML : références à Word libérées tous les N tableaux.</summary>
+        private const int ReleaseEveryTables = 20;
+
         private readonly dynamic _application;
 
         public ExportService(object application)
@@ -77,6 +80,7 @@ namespace WordTableToExcel.Export
                 finally
                 {
                     Cursor.Current = previousCursor;
+                    WordCom.ReleaseUnusedReferences(); // paragraphes, champs… parcourus pour les légendes
                 }
                 if (tables.Count == 0)
                 {
@@ -380,6 +384,12 @@ namespace WordTableToExcel.Export
                     report.Failures.Add(string.Format(CultureInfo.CurrentCulture, "Tableau {0} ({1}) non exporté : {2}", item.Table.Index, item.SheetName, ex.Message));
                     continue;
                 }
+                finally
+                {
+                    // Objets de Word lus pour ce tableau : libérés sans attendre la fin de l'export (après chaque tableau
+                    // lu cellule par cellule, qui en crée des milliers ; de temps en temps sinon).
+                    if (reader.LastReadCellByCell || (i + 1) % ReleaseEveryTables == 0) WordCom.ReleaseUnusedReferences();
+                }
 
                 if (model.RowCount == 0 || model.Cells.Count == 0)
                 {
@@ -393,6 +403,10 @@ namespace WordTableToExcel.Export
                 model.SheetName = item.SheetName;
                 writer.AddTable(model);
                 report.Exported++;
+                foreach (var omission in model.Omissions)
+                {
+                    report.Omissions.Add(string.Format(CultureInfo.CurrentCulture, "Tableau {0} : {1}", item.Table.Index, omission));
+                }
                 foreach (var warning in model.Warnings)
                 {
                     report.Warnings.Add(string.Format(CultureInfo.CurrentCulture, "Tableau {0} : {1}", item.Table.Index, warning));
@@ -443,16 +457,29 @@ namespace WordTableToExcel.Export
             var text = new StringBuilder();
             text.AppendFormat(CultureInfo.CurrentCulture, "Export terminé : {0} tableau{1} exporté{1} vers\n{2}\n", report.Exported, report.Exported > 1 ? "x" : string.Empty, path);
 
-            var notes = report.Failures.Concat(report.Warnings).ToList();
-            if (notes.Count > 0)
+            // Ce qui manque dans le classeur d'abord, bien en vue ; les simples remarques ensuite.
+            if (report.Failures.Count > 0)
+            {
+                text.AppendFormat(CultureInfo.CurrentCulture, "\nAttention : {0} tableau{1} non exporté{1} :\n", report.Failures.Count, report.Failures.Count > 1 ? "x" : string.Empty);
+                AppendList(text, report.Failures, 10);
+            }
+            if (report.Omissions.Count > 0)
+            {
+                text.Append("\nInformations absentes du classeur :\n");
+                AppendList(text, report.Omissions, 10);
+            }
+            if (report.Warnings.Count > 0)
             {
                 text.Append("\nRemarques :\n");
-                foreach (var note in notes.Take(8)) text.Append("• ").Append(note).Append('\n');
-                if (notes.Count > 8) text.AppendFormat(CultureInfo.CurrentCulture, "… et {0} autre(s) (voir le journal).\n", notes.Count - 8);
+                AppendList(text, report.Warnings, 5);
             }
             text.Append("\nVoulez-vous ouvrir le classeur maintenant ?");
 
-            if (!Messages.Ask(owner, text.ToString())) return;
+            // Tout le détail dans le journal, y compris ce que la fenêtre n'affiche pas.
+            foreach (var line in report.Failures.Concat(report.Omissions).Concat(report.Warnings)) Log.Info("Rapport d'export : " + line);
+
+            bool losses = report.Failures.Count > 0 || report.Omissions.Count > 0;
+            if (!(losses ? Messages.AskWarning(owner, text.ToString()) : Messages.Ask(owner, text.ToString()))) return;
             try
             {
                 Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
@@ -463,10 +490,19 @@ namespace WordTableToExcel.Export
             }
         }
 
+        private static void AppendList(StringBuilder text, List<string> lines, int max)
+        {
+            foreach (var line in lines.Take(max)) text.Append("• ").Append(line).Append('\n');
+            if (lines.Count > max) text.AppendFormat(CultureInfo.CurrentCulture, "… et {0} autre(s) (voir le journal).\n", lines.Count - max);
+        }
+
         private sealed class ExportReport
         {
             public int Exported;
+            /// <summary>Tableaux non exportés.</summary>
             public readonly List<string> Failures = new List<string>();
+            /// <summary>Informations des tableaux exportés absentes du classeur (images, texte coupé…).</summary>
+            public readonly List<string> Omissions = new List<string>();
             public readonly List<string> Warnings = new List<string>();
         }
     }
