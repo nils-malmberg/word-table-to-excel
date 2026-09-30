@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using WordTableToExcel.Core.Captions;
 using WordTableToExcel.Core.Model;
+using WordTableToExcel.Export;
 using Xunit;
 
 namespace WordTableToExcel.Tests
@@ -207,6 +209,67 @@ namespace WordTableToExcel.Tests
 
             Assert.Equal(CaptionPosition.Below, convention);
             Assert.Equal("Tableau 1", result[0].Caption.Text);
+        }
+
+        /// <summary>
+        /// Légende 1, tableau 1, tableau 2, légende 2, tableau 3 (texte entre les deux blocs), dans un document dont
+        /// la plupart des légendes sont détectées au-dessous : la légende 2 revient au tableau 2 en automatique ; au
+        /// tableau 3 si l'utilisateur impose « au-dessus ».
+        /// </summary>
+        private static List<TableCaptionContext> UserScenarioInBelowDocument(out CaptionCandidate l1, out CaptionCandidate l2)
+        {
+            l1 = C(1, "Tableau 1");
+            l2 = C(4, "Tableau 2");
+            return new List<TableCaptionContext>
+            {
+                new TableCaptionContext { TableIndex = 1, Above = l1 },
+                new TableCaptionContext { TableIndex = 2, Below = l2 },
+                new TableCaptionContext { TableIndex = 3, Above = l2 },
+                new TableCaptionContext { TableIndex = 4, Below = C(8, "Tableau 4") },
+                new TableCaptionContext { TableIndex = 5, Below = C(11, "Tableau 5") }
+            };
+        }
+
+        [Fact]
+        public void ForcedPosition_OverridesTheDetectedConvention()
+        {
+            CaptionCandidate l1, l2;
+            var tables = UserScenarioInBelowDocument(out l1, out l2);
+
+            CaptionPosition detected;
+            var automatic = CaptionAssigner.Assign(tables, CaptionPosition.None, out detected);
+            Assert.Equal(CaptionPosition.Below, detected);
+            Assert.Same(l2, automatic[1].Caption);  // la confusion signalée par l'utilisateur
+            Assert.Null(automatic[2].Caption);
+
+            var above = CaptionAssigner.Assign(tables, CaptionPosition.Above, out detected);
+            Assert.Equal(CaptionPosition.Below, detected); // la détection reste affichée telle quelle
+            Assert.Same(l1, above[0].Caption);
+            Assert.Null(above[1].Caption);
+            Assert.Same(l2, above[2].Caption);
+            Assert.Equal(CaptionPosition.Above, above[2].Position);
+            // Légendes situées sous leur tableau et revendiquées par aucun autre : toujours trouvées.
+            Assert.Equal(CaptionPosition.Below, above[3].Position);
+            Assert.Equal("Tableau 5", above[4].Caption.Text);
+        }
+
+        [Fact]
+        public void AssignCaptions_UpdatesTheEntriesAndReturnsTheDetectedConvention()
+        {
+            CaptionCandidate l1, l2;
+            var contexts = UserScenarioInBelowDocument(out l1, out l2);
+            var entries = contexts.Select(c => new TableEntry { Index = c.TableIndex, CaptionAbove = c.Above, CaptionBelow = c.Below }).ToList();
+
+            Assert.Equal(CaptionPosition.Below, ExportPlan.AssignCaptions(entries, CaptionPosition.Above));
+            Assert.Equal("Tableau 2", entries[2].Caption);
+            Assert.Equal(CaptionPosition.Above, entries[2].CaptionPosition);
+            Assert.False(entries[1].HasCaption);
+            Assert.Equal("Tableau 2", ExportPlan.Build(entries, false).Single(p => p.Table.Index == 3).SheetName);
+
+            Assert.Equal(CaptionPosition.Below, ExportPlan.AssignCaptions(entries, CaptionPosition.None));
+            Assert.Equal("Tableau 2", entries[1].Caption);
+            Assert.False(entries[2].HasCaption);
+            Assert.Equal(CaptionPosition.None, entries[2].CaptionPosition);
         }
     }
 

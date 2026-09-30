@@ -13,7 +13,9 @@ INSTALLER
      Word 2000-2003 : barre d'outils Standard).
 
 UTILISER
-  Cliquez sur « Tableaux vers Excel », choisissez :
+  Cliquez sur « Tableaux vers Excel ». « Position des légendes » affiche la position
+  détectée (au-dessus ou au-dessous des tableaux) : si elle est fausse, choisissez la
+  bonne, la liste se met à jour. Choisissez ensuite :
     A - uniquement les tableaux qui ont une légende (« Tableau 1 : ... », champ SEQ) ;
     B - tous les tableaux (ceux sans légende deviennent Tableau_1, Tableau_2...).
   Puis choisissez où enregistrer le fichier Excel. Une feuille est créée par tableau,

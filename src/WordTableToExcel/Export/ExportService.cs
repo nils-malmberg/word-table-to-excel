@@ -92,18 +92,21 @@ namespace WordTableToExcel.Export
 
                 string documentName = WordCom.AsString(document.Name);
                 bool allTables, includeCaption, convertNumbers;
+                CaptionPosition captionPosition;
                 ICollection<int> excluded;
-                using (var dialog = new ExportDialog(documentName, tables, convention, settings.AllTables, settings.IncludeCaptionRow, settings.ConvertNumbers, deletedTables))
+                using (var dialog = new ExportDialog(documentName, tables, convention, settings.ExportCaptionPosition, settings.AllTables, settings.IncludeCaptionRow, settings.ConvertNumbers, deletedTables))
                 {
                     if (dialog.ShowDialog(owner) != DialogResult.OK) return;
                     allTables = dialog.AllTables;
                     includeCaption = dialog.IncludeCaptionRow;
                     convertNumbers = dialog.ConvertNumbers;
+                    captionPosition = dialog.CaptionPositionChoice; // légendes déjà réattribuées si elle a changé
                     excluded = dialog.ExcludedTables;
                 }
                 settings.AllTables = allTables;
                 settings.IncludeCaptionRow = includeCaption;
                 settings.ConvertNumbers = convertNumbers;
+                settings.ExportCaptionPosition = captionPosition;
 
                 var plan = ExportPlan.Build(tables, allTables, excluded);
                 if (plan.Count == 0)
@@ -210,20 +213,22 @@ namespace WordTableToExcel.Export
             if (index != tableCount) Log.Info("Nombre de tableaux : " + tableCount + " annoncés, " + index + " parcourus.");
             if (deletedTables > 0) Log.Info(deletedTables + " tableau(x) supprimé(s) en suivi des modifications, ignoré(s).");
 
-            var assignments = CaptionAssigner.Assign(contexts, out convention);
             var entries = new List<TableEntry>();
             for (int i = 0; i < contexts.Count; i++)
             {
                 entries.Add(new TableEntry
                 {
                     Index = contexts[i].TableIndex,
-                    Caption = assignments[i].Caption == null ? null : assignments[i].Caption.Text,
-                    CaptionPosition = assignments[i].Position,
+                    CaptionAbove = contexts[i].Above,
+                    CaptionBelow = contexts[i].Below,
                     StartPage = pages[i][0],
                     EndPage = pages[i][1]
                 });
             }
-            Log.Info(string.Format("{0} tableau(x), {1} avec légende, convention : {2}.", entries.Count, entries.Count(e => e.HasCaption), convention));
+            // Position choisie la dernière fois (ou détection automatique) ; modifiable dans la boîte de dialogue.
+            convention = ExportPlan.AssignCaptions(entries, settings.ExportCaptionPosition);
+            Log.Info(string.Format("{0} tableau(x), {1} avec légende, convention détectée : {2}, position choisie : {3}.",
+                entries.Count, entries.Count(e => e.HasCaption), convention, settings.ExportCaptionPosition == CaptionPosition.None ? "automatique" : settings.ExportCaptionPosition.ToString()));
             return entries;
         }
 

@@ -146,8 +146,10 @@ complément pour l'utilisateur courant (`HKEY_CURRENT_USER`, Office 32 et 64 bit
 
 1. Ouvrez le document Word qui contient les tableaux.
 2. Cliquez sur **Accueil › Excel › Tableaux vers Excel**.
-3. La boîte de dialogue indique le nombre de tableaux trouvés, combien ont une légende, et si les
-   légendes sont placées au-dessus ou au-dessous des tableaux. Choisissez :
+3. La boîte de dialogue indique le nombre de tableaux trouvés et combien ont une légende. La liste
+   **Position des légendes** affiche la position détectée (« Automatique — détectée : au-dessus des
+   tableaux ») : si ce n'est pas la bonne, choisissez **Au-dessus des tableaux** ou **Au-dessous des
+   tableaux**, les légendes de la liste sont réattribuées aussitôt. Choisissez ensuite :
    - **A — Uniquement les tableaux qui ont une légende**, ou
    - **B — Tous les tableaux du document**.
 
@@ -188,9 +190,14 @@ Un paragraphe contenant un champ `SEQ Figure` (ou toute autre séquence) n'est j
 légende de tableau. Le libellé « Tableau » de la langue d'interface de Word est aussi reconnu
 automatiquement.
 
-**Position automatique** : le complément détermine la convention du document (légendes au-dessus ou
-au-dessous) d'après les tableaux dont la légende n'est possible que d'un seul côté, puis l'applique aux
-cas ambigus. Une légende située entre deux tableaux n'est jamais attribuée aux deux.
+**Position des légendes** : une légende située entre deux tableaux (légende 1, tableau 1, tableau 2,
+légende 2, tableau 3) peut appartenir à l'un comme à l'autre ; seule la convention du document tranche.
+En mode **Automatique**, le complément la détermine (légendes au-dessus ou au-dessous) d'après les
+tableaux dont la légende n'est possible que d'un seul côté, et l'affiche dans la liste « Position des
+légendes ». Si elle est fausse (document qui enchaîne beaucoup de tableaux, ou qui mélange les deux
+conventions), imposez-la : la position choisie est appliquée à tous les cas ambigus. Une légende placée
+de l'autre côté reste trouvée tant qu'aucun autre tableau ne la revendique du côté choisi (la colonne
+Légende l'indique par ↑ ou ↓). Une légende n'est jamais attribuée à deux tableaux. Le choix est mémorisé.
 
 **Nom des feuilles** : la légende nettoyée (« Tableau 3 : Coûts » devient « Tableau 3 - Coûts »),
 tronquée à 31 caractères, sans les caractères interdits par Excel (`\ / ? * [ ] :`) et rendue unique
@@ -501,6 +508,7 @@ Préférences stockées dans `HKEY_CURRENT_USER\Software\WordTableToExcel` :
 | `AllTables` | DWORD | Dernier choix A (0) / B (1) |
 | `IncludeCaptionRow` | DWORD | Légende en A1 (1) ou non (0) |
 | `ConvertNumbers` | DWORD | Conversion des nombres (1) ou non (0) |
+| `ExportCaptionPosition` | DWORD | Position des légendes à l'export : automatique (0), au-dessus (1), au-dessous (2) |
 | `LastFolder` | Chaîne | Dernier dossier d'enregistrement |
 | `ExtraCaptionLabels` | Chaîne | Libellés de légende supplémentaires, séparés par `;` (ex. `Annexe;Tab.`) |
 | `ImportAddCaption` | DWORD | Import : ajouter une légende (1) ou non (0) |

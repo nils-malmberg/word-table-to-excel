@@ -91,13 +91,18 @@ namespace WordTableToExcel.App
 
                 check("Boîte de dialogue d'export", () =>
                 {
+                    // Légende 1, tableau 1, tableau 2, légende 2, tableau 3 : la légende 2 touche les tableaux 2 et 3.
+                    var l1 = new CaptionCandidate(10, "Tableau 1 : Ventes trimestrielles par région", true);
+                    var l2 = new CaptionCandidate(20, "Tableau 2 : Effectifs", true);
                     var tables = new List<TableEntry>
                     {
-                        new TableEntry { Index = 1, Caption = "Tableau 1 : Ventes trimestrielles par région", CaptionPosition = CaptionPosition.Above, StartPage = 3, EndPage = 4 },
-                        new TableEntry { Index = 2, StartPage = 4, EndPage = 4 },
-                        new TableEntry { Index = 3, Caption = "Tableau 2 : Effectifs", CaptionPosition = CaptionPosition.Above, StartPage = 7, EndPage = 7 }
+                        new TableEntry { Index = 1, CaptionAbove = l1, StartPage = 3, EndPage = 4 },
+                        new TableEntry { Index = 2, CaptionBelow = l2, StartPage = 4, EndPage = 4 },
+                        new TableEntry { Index = 3, CaptionAbove = l2, StartPage = 7, EndPage = 7 }
                     };
-                    using (var dialog = new ExportDialog("Rapport annuel 2024.docx", tables, CaptionPosition.Above, true, true, false))
+                    var detected = ExportPlan.AssignCaptions(tables, CaptionPosition.None);
+                    if (detected != CaptionPosition.Above || tables[2].Caption != l2.Text || tables[1].HasCaption) throw new InvalidOperationException("Légendes mal attribuées (automatique).");
+                    using (var dialog = new ExportDialog("Rapport annuel 2024.docx", tables, detected, CaptionPosition.None, true, true, false))
                     {
                         ShowOffscreen(dialog);
                         Capture(dialog, Path.Combine(output, "export.png"));
@@ -115,6 +120,19 @@ namespace WordTableToExcel.App
                         if (plan.Count != 2 || plan.Any(p => p.Table.Index == 2)) throw new InvalidOperationException("Le tableau décoché serait exporté.");
                         Capture(dialog, Path.Combine(output, "export-decoche.png"));
                         report.AppendLine("       export : « Tout », puis tableau 2 décoché → " + plan.Count + " feuilles");
+
+                        // Position imposée « au-dessous » : la légende 2 passe au tableau 2, la liste est mise à jour aussitôt.
+                        dialog.SetCaptionPosition(CaptionPosition.Below);
+                        Application.DoEvents();
+                        if (dialog.CaptionPositionChoice != CaptionPosition.Below || tables[1].Caption != l2.Text || tables[2].HasCaption || tables[0].Caption != l1.Text)
+                        {
+                            throw new InvalidOperationException("Légendes mal réattribuées (au-dessous).");
+                        }
+                        Capture(dialog, Path.Combine(output, "export-legendes-dessous.png"));
+                        dialog.SetCaptionPosition(CaptionPosition.None);
+                        Application.DoEvents();
+                        if (tables[2].Caption != l2.Text || tables[1].HasCaption) throw new InvalidOperationException("Légendes mal réattribuées (retour en automatique).");
+                        report.AppendLine("       export : position des légendes automatique (au-dessus) ↔ au-dessous imposée");
                         dialog.Close();
                     }
                 });
