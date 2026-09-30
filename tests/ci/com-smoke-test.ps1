@@ -34,9 +34,26 @@ function Invoke-Activation([string]$cscript, [bool]$standardUser) {
     } else {
         & $cscript //nologo $activate $out | Out-Host
     }
-    $result = [IO.File]::ReadAllText($out)
+    $result = Read-Shared $out
     Remove-Item $out -ErrorAction SilentlyContinue
     return $result
+}
+
+# Le fichier résultat peut rester ouvert un instant après sa création (écriture par cscript lancé via runas,
+# analyse antivirus) : on réessaie tant qu'il est verrouillé, au plus 30 secondes.
+function Read-Shared([string]$path) {
+    $attempt = 0
+    while ($true) {
+        try {
+            return [IO.File]::ReadAllText($path)
+        } catch {
+            $e = $_.Exception
+            if ($e.InnerException) { $e = $e.InnerException }
+            $attempt++
+            if ($e -isnot [System.IO.IOException] -or $attempt -ge 60) { throw }
+            Start-Sleep -Milliseconds 500
+        }
+    }
 }
 
 # --- 1. Copie du dossier, fichiers marqués « téléchargés ».
