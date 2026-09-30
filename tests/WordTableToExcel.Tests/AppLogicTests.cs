@@ -170,5 +170,38 @@ namespace WordTableToExcel.Tests
             Assert.Null(ComErrors.FriendlyMessage(new InvalidOperationException("x")));
             Assert.Equal(0, ComErrors.HResultOf(null));
         }
+
+        // ------------------------------------------------------------------ Word invisible resté ouvert
+
+        [Fact]
+        public void HiddenWordRecord_RoundTrip()
+        {
+            var start = new DateTime(2026, 9, 30, 14, 5, 7, DateTimeKind.Utc).AddTicks(1234567);
+            int pid;
+            DateTime parsed;
+            Assert.True(HiddenWordRecord.TryParse(HiddenWordRecord.Format(4242, start), out pid, out parsed));
+            Assert.Equal(4242, pid);
+            Assert.Equal(start, parsed);
+
+            Assert.False(HiddenWordRecord.TryParse("", out pid, out parsed));
+            Assert.False(HiddenWordRecord.TryParse("abc;12", out pid, out parsed));
+            Assert.False(HiddenWordRecord.TryParse("-5;12", out pid, out parsed));
+            Assert.False(HiddenWordRecord.TryParse("12;-3", out pid, out parsed));
+            Assert.False(HiddenWordRecord.TryParse("12", out pid, out parsed));
+            Assert.Equal(0, pid);
+        }
+
+        [Fact]
+        public void HiddenWordRecord_OnlyOurInvisibleWordIsAnOrphan()
+        {
+            var start = new DateTime(2026, 9, 30, 14, 5, 7, DateTimeKind.Utc);
+            Assert.True(HiddenWordRecord.IsOrphan("WINWORD", start.AddMilliseconds(400), start, false));
+            Assert.True(HiddenWordRecord.IsOrphan("winword", start, start, false));
+            // Word rendu visible (document de l'utilisateur) : on n'y touche pas.
+            Assert.False(HiddenWordRecord.IsOrphan("WINWORD", start, start, true));
+            // Numéro repris par un autre Word, lancé plus tard, ou par un autre programme.
+            Assert.False(HiddenWordRecord.IsOrphan("WINWORD", start.AddMinutes(3), start, false));
+            Assert.False(HiddenWordRecord.IsOrphan("EXCEL", start, start, false));
+        }
     }
 }

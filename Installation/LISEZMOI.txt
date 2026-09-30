@@ -3,6 +3,11 @@
 
 Aucune compilation, aucun droit administrateur : tout ce qu'il faut est dans ce dossier.
 
+Complément GELÉ : il reçoit les améliorations communes (export, import,
+légendes...), mais plus de nouvelles fonctions qui lui soient propres. La
+version recommandée est l'application TableauxWordExcel.exe (dossier
+Application), qui offre les mêmes fonctions sans rien installer dans Word.
+
 INSTALLER
   1. Fermez Word.
   2. Double-cliquez sur « install.cmd ».
@@ -45,6 +50,18 @@ SI LES BOUTONS N'APPARAISSENT PAS (PC PROFESSIONNEL)
   TableauxWordExcel.exe (dossier Application), qui n'est pas un complément et
   offre les mêmes fonctions.
 
+AUTRES PROBLÈMES
+  - Le complément a été désactivé par Word : Fichier > Options > Compléments,
+    « Gérer : Éléments désactivés » > Atteindre... : réactivez-le, puis
+    redémarrez Word.
+  - Les boutons n'apparaissent pas (sans message) : Fichier > Options >
+    Compléments, « Gérer : Compléments COM » > Atteindre... : cochez
+    « Tableaux Word vers Excel ».
+  - « Une erreur d'exécution s'est produite » : vérifiez que .NET Framework 4
+    est installé (inclus dans Windows 8, 10, 11), puis relancez install.cmd.
+  - install.cmd signale un fichier manquant : le .zip n'a pas été extrait
+    (clic droit > Extraire tout), lancez install.cmd depuis le dossier extrait.
+
 DÉSINSTALLER
   Fermez Word, puis double-cliquez sur « uninstall.cmd ».
 
@@ -58,4 +75,5 @@ CONTENU DU DOSSIER
 
 Les fichiers sont copiés dans %LOCALAPPDATA%\WordTableToExcel.
 En cas de problème : %LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log
-Documentation complète : README.md à la racine du dépôt.
+Mode d'emploi détaillé : README.md à la racine du dépôt ;
+documentation technique : DEVELOPPEMENT.md.

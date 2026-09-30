@@ -12,6 +12,8 @@ namespace WordTableToExcel.Infrastructure
         public bool AllTables;
         public bool IncludeCaptionRow = true;
         public bool ConvertNumbers;
+        /// <summary>Feuille « Sommaire » en tête du classeur exporté (à partir de deux tableaux).</summary>
+        public bool ExportSummary = true;
         /// <summary>Position des légendes à l'export : None = détection automatique, Above, Below.</summary>
         public CaptionPosition ExportCaptionPosition;
         public string LastFolder;
@@ -46,6 +48,7 @@ namespace WordTableToExcel.Infrastructure
                     s.AllTables = ReadBool(key, "AllTables", s.AllTables);
                     s.IncludeCaptionRow = ReadBool(key, "IncludeCaptionRow", s.IncludeCaptionRow);
                     s.ConvertNumbers = ReadBool(key, "ConvertNumbers", s.ConvertNumbers);
+                    s.ExportSummary = ReadBool(key, "ExportSummary", s.ExportSummary);
                     object position = key.GetValue("ExportCaptionPosition");
                     if (position is int && (int)position >= 0 && (int)position <= 2) s.ExportCaptionPosition = (CaptionPosition)(int)position;
                     s.LastFolder = key.GetValue("LastFolder") as string;
@@ -79,6 +82,7 @@ namespace WordTableToExcel.Infrastructure
                     key.SetValue("AllTables", AllTables ? 1 : 0, RegistryValueKind.DWord);
                     key.SetValue("IncludeCaptionRow", IncludeCaptionRow ? 1 : 0, RegistryValueKind.DWord);
                     key.SetValue("ConvertNumbers", ConvertNumbers ? 1 : 0, RegistryValueKind.DWord);
+                    key.SetValue("ExportSummary", ExportSummary ? 1 : 0, RegistryValueKind.DWord);
                     key.SetValue("ExportCaptionPosition", (int)ExportCaptionPosition, RegistryValueKind.DWord);
                     if (!string.IsNullOrEmpty(LastFolder)) key.SetValue("LastFolder", LastFolder);
                     key.SetValue("ImportAddCaption", ImportAddCaption ? 1 : 0, RegistryValueKind.DWord);

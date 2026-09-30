@@ -31,6 +31,7 @@ namespace WordTableToExcel.UI
         private readonly RadioButton _captionedOnly;
         private readonly RadioButton _allTables;
         private readonly CheckBox _includeCaption;
+        private readonly CheckBox _includeSummary;
         private readonly CheckBox _convertNumbers;
         private readonly DataGridView _preview;
         private readonly SelectAllHeader _selectAll;
@@ -45,8 +46,9 @@ namespace WordTableToExcel.UI
         /// <param name="detected">Position des légendes détectée dans le document (affichée pour le choix « Automatique »).</param>
         /// <param name="captionPosition">Position choisie (None : automatique), avec laquelle les légendes de <paramref name="tables"/> ont été attribuées.</param>
         /// <param name="deletedTables">Tableaux supprimés en suivi des modifications, écartés (signalés dans le résumé).</param>
+        /// <param name="includeSummary">Feuille « Sommaire » en tête du classeur (à partir de deux feuilles).</param>
         public ExportDialog(string documentName, IList<TableEntry> tables, CaptionPosition detected, CaptionPosition captionPosition, bool allTables,
-            bool includeCaption, bool convertNumbers, int deletedTables = 0)
+            bool includeCaption, bool convertNumbers, bool includeSummary, int deletedTables = 0)
         {
             _tables = tables;
             _deletedTables = deletedTables;
@@ -146,6 +148,13 @@ namespace WordTableToExcel.UI
                 Checked = includeCaption,
                 Margin = new Padding(8, 2, 0, 0)
             };
+            _includeSummary = new CheckBox
+            {
+                Text = "Ajouter une feuille « Sommaire » en tête du classeur (liste des tableaux, avec un lien vers chaque feuille)",
+                AutoSize = true,
+                Checked = includeSummary,
+                Margin = new Padding(8, 4, 0, 0)
+            };
             _convertNumbers = new CheckBox
             {
                 Text = "Convertir les nombres en valeurs numériques Excel",
@@ -154,6 +163,7 @@ namespace WordTableToExcel.UI
                 Margin = new Padding(8, 4, 0, 0)
             };
             root.Controls.Add(_includeCaption);
+            root.Controls.Add(_includeSummary);
             root.Controls.Add(_convertNumbers);
             root.Controls.Add(Hint("Par exemple « 1 234,50 », « 12,5 % », « 45 € ». Sinon, le contenu des cellules est copié tel quel, sous forme de texte.", width));
 
@@ -255,6 +265,11 @@ namespace WordTableToExcel.UI
         public bool ConvertNumbers
         {
             get { return _convertNumbers.Checked; }
+        }
+
+        public bool IncludeSummary
+        {
+            get { return _includeSummary.Checked; }
         }
 
         /// <summary>Rang des tableaux décochés par l'utilisateur.</summary>

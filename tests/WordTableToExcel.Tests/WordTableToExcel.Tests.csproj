@@ -23,6 +23,7 @@
     <Compile Include="..\..\src\TableauxWordExcel\App\DocumentList.cs" Link="Linked\App\DocumentList.cs" />
     <Compile Include="..\..\src\TableauxWordExcel\App\InsertionInfo.cs" Link="Linked\App\InsertionInfo.cs" />
     <Compile Include="..\..\src\TableauxWordExcel\App\ComErrors.cs" Link="Linked\App\ComErrors.cs" />
+    <Compile Include="..\..\src\TableauxWordExcel\App\HiddenWordRecord.cs" Link="Linked\App\HiddenWordRecord.cs" />
   </ItemGroup>
 
   <ItemGroup>

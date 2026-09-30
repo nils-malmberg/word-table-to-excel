@@ -259,6 +259,8 @@ namespace WordTableToExcel.Core.Layout
                 }
             }
 
+            layout.HeaderRowCount = headerRows;
+
             // Mise en forme des cellules (directe + style de tableau).
             var context = new StyleContext(layout, chain, look, tblPr, Math.Max(1, headerRows));
             var tcPrByCell = rawRows.SelectMany(x => x).Where(x => !x.IsContinuation).ToDictionary(x => x.Layout, x => x);

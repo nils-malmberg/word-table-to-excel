@@ -55,6 +55,15 @@ namespace WordTableToExcel.Tests.Fakes
         }
 
         public FakeRange Range() => Range(0, Chars.Count);
+        public int RevisionsCalls;
+        public FakeRevisions Revisions
+        {
+            get
+            {
+                RevisionsCalls++;
+                return new FakeRevisions(RevisionList);
+            }
+        }
         public FakeRange Content => new FakeRange(this, 0, Chars.Count);
         public FakeTables Tables => new FakeTables(TableList.Where(t => t.NestingLevel == 1).ToList());
         public FakeStyles Styles => new FakeStyles();
@@ -176,7 +185,14 @@ namespace WordTableToExcel.Tests.Fakes
         public FakeFields Fields => new FakeFields(_doc.FieldList.Where(f => f.Position >= Start && f.Position < End).ToList());
 
         /// <summary>Révisions qui touchent la plage (comme Word, chacune avec sa plage complète).</summary>
-        public FakeRevisions Revisions => new FakeRevisions(_doc.RevisionList.Where(r => r.Start < End && r.End > Start).ToList());
+        public FakeRevisions Revisions
+        {
+            get
+            {
+                _doc.RevisionsCalls++;
+                return new FakeRevisions(_doc.RevisionList.Where(r => r.Start < End && r.End > Start).ToList());
+            }
+        }
 
         public FakeDocument Document => _doc;
 

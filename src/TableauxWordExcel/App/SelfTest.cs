@@ -59,6 +59,18 @@ namespace WordTableToExcel.App
                     if (!filter.IsRegistered) throw new InvalidOperationException("CoRegisterMessageFilter a échoué.");
                 });
 
+                check("Word invisible resté ouvert : aucun autre programme n'est fermé", () =>
+                {
+                    // Trace désignant ce processus (qui n'est pas Word) : le nettoyage l'efface sans rien fermer.
+                    using (var self = System.Diagnostics.Process.GetCurrentProcess())
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(HiddenWord.RecordPath));
+                        File.WriteAllText(HiddenWord.RecordPath, HiddenWordRecord.Format(self.Id, self.StartTime.ToUniversalTime()));
+                    }
+                    HiddenWord.CleanUpOrphan();
+                    if (File.Exists(HiddenWord.RecordPath)) throw new InvalidOperationException("La trace du Word invisible n'a pas été effacée.");
+                });
+
                 check("Recherche de Word", () =>
                 {
                     var instances = WordInstances.Find();
@@ -102,7 +114,7 @@ namespace WordTableToExcel.App
                     };
                     var detected = ExportPlan.AssignCaptions(tables, CaptionPosition.None);
                     if (detected != CaptionPosition.Above || tables[2].Caption != l2.Text || tables[1].HasCaption) throw new InvalidOperationException("Légendes mal attribuées (automatique).");
-                    using (var dialog = new ExportDialog("Rapport annuel 2024.docx", tables, detected, CaptionPosition.None, true, true, false))
+                    using (var dialog = new ExportDialog("Rapport annuel 2024.docx", tables, detected, CaptionPosition.None, true, true, false, true))
                     {
                         ShowOffscreen(dialog);
                         Capture(dialog, Path.Combine(output, "export.png"));

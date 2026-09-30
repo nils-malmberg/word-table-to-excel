@@ -363,6 +363,22 @@ namespace WordTableToExcel.Tests
         }
 
         [Fact]
+        public void DocumentWithoutRevisions_NoRevisionLookups()
+        {
+            var b = new FakeDocumentBuilder();
+            var table = b.Table(new List<IList<FakeCellSpec>> { new List<FakeCellSpec> { Cell(1, "Prix"), Cell(2, "150") } });
+            Assert.False(WordRevisions.DocumentHasRevisions(b.Doc));
+
+            b.Doc.RevisionsCalls = 0;
+            var model = new WordTableReader(b.Doc, null) { CheckRevisions = false }.Read(table, 1, null);
+            Assert.Equal("150", At(model, 0, 1).PlainText);
+            Assert.Equal(0, b.Doc.RevisionsCalls);
+
+            b.Revision("15");
+            Assert.True(WordRevisions.DocumentHasRevisions(b.Doc));
+        }
+
+        [Fact]
         public void TableEntirelyDeleted_IsDetected()
         {
             var b = new FakeDocumentBuilder();
@@ -468,6 +484,19 @@ namespace WordTableToExcel.Tests
 
             var scanner = new WordCaptionScanner(b.Doc, new CaptionMatcher(), null);
             Assert.Equal("Tableaux comparatifs", scanner.Scan(t1, 1).Above.Text);
+        }
+
+        [Fact]
+        public void CaptionScanWithoutRevisionLookups()
+        {
+            var b = new FakeDocumentBuilder();
+            b.Paragraph("Tableau 9 : Titre", Plain);
+            var t1 = SmallTable(b, "a");
+
+            b.Doc.RevisionsCalls = 0;
+            var scanner = new WordCaptionScanner(b.Doc, new CaptionMatcher(), null) { CheckRevisions = false };
+            Assert.Equal("Tableau 9 : Titre", scanner.Scan(t1, 1).Above.Text);
+            Assert.Equal(0, b.Doc.RevisionsCalls);
         }
 
         [Fact]

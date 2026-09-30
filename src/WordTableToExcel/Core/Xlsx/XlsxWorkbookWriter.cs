@@ -20,6 +20,11 @@ namespace WordTableToExcel.Core.Xlsx
         public CultureInfo NumberCulture = CultureInfo.CurrentCulture;
         /// <summary>Titre du classeur (propriétés du document).</summary>
         public string Title;
+        /// <summary>
+        /// Ajoute en tête du classeur une feuille « Sommaire » : un tableau par ligne (n°, légende complète, pages dans le
+        /// document Word, lien vers sa feuille).
+        /// </summary>
+        public bool IncludeSummary;
     }
 
     /// <summary>
@@ -48,6 +53,21 @@ namespace WordTableToExcel.Core.Xlsx
         {
             public string Name;
             public byte[] Xml;
+            // Pour la feuille « Sommaire ».
+            public int DocumentIndex;
+            public string Caption;
+            public int StartPage;
+            public int EndPage;
+        }
+
+        /// <summary>Nom de la feuille de sommaire (suivi de « (2) »… si un tableau porte déjà ce nom).</summary>
+        public const string SummarySheetName = "Sommaire";
+
+        /// <summary>Feuille « Sommaire » (ou « Sommaire (2) »…) : à l'import, elle n'est pas proposée comme un tableau.</summary>
+        public static bool IsSummarySheetName(string sheetName)
+        {
+            return sheetName != null && System.Text.RegularExpressions.Regex.IsMatch(sheetName.Trim(),
+                "^" + SummarySheetName + @"( \(\d+\))?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         }
 
         private readonly XlsxExportOptions _options;
@@ -55,6 +75,7 @@ namespace WordTableToExcel.Core.Xlsx
         private readonly List<object> _strings = new List<object>(); // string ou List<TextRun>
         private readonly Dictionary<string, int> _stringIndex = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<Sheet> _sheets = new List<Sheet>();
+        private Sheet _summary;
         private int _stringReferences;
 
         public XlsxWorkbookWriter(XlsxExportOptions options)
@@ -104,10 +125,18 @@ namespace WordTableToExcel.Core.Xlsx
                 if (row.Count > 0) lastCol = Math.Max(lastCol, row.Keys.Max());
             }
 
+            // Lignes d'en-tête répétées dans Word : figées en haut de la feuille (avec la légende éventuelle au-dessus).
+            int frozenRows = table.HeaderRowCount > 0 && table.HeaderRowCount < table.RowCount ? rowOffset + table.HeaderRowCount : 0;
+            // Feuille active à l'ouverture : la première, sauf si le sommaire la précède.
+            bool selected = _sheets.Count == 0 && !_options.IncludeSummary;
             _sheets.Add(new Sheet
             {
                 Name = table.SheetName,
-                Xml = BuildSheetXml(table, cells, merges, rowHeights, lastRow, lastCol, _sheets.Count == 0)
+                DocumentIndex = table.DocumentIndex,
+                Caption = table.Caption,
+                StartPage = table.StartPage,
+                EndPage = table.EndPage,
+                Xml = BuildSheetXml(table, cells, merges, rowHeights, lastRow, lastCol, selected, frozenRows)
             });
         }
 
@@ -122,22 +151,151 @@ namespace WordTableToExcel.Core.Xlsx
         public void Save(Stream output)
         {
             if (_sheets.Count == 0) throw new InvalidOperationException("Le classeur ne contient aucune feuille.");
+            // Sommaire construit d'abord : il ajoute ses textes et ses styles à ceux du classeur.
+            var sheets = new List<Sheet>();
+            if (_options.IncludeSummary)
+            {
+                if (_summary == null) _summary = BuildSummary();
+                sheets.Add(_summary);
+            }
+            sheets.AddRange(_sheets);
             using (var zip = new ZipWriter(output))
             {
-                zip.AddEntry("[Content_Types].xml", ContentTypesXml());
+                zip.AddEntry("[Content_Types].xml", ContentTypesXml(sheets.Count));
                 zip.AddEntry("_rels/.rels", RootRelsXml());
                 zip.AddEntry("docProps/core.xml", CoreXml());
                 zip.AddEntry("docProps/app.xml", AppXml());
-                zip.AddEntry("xl/workbook.xml", WorkbookXml());
-                zip.AddEntry("xl/_rels/workbook.xml.rels", WorkbookRelsXml());
+                zip.AddEntry("xl/workbook.xml", WorkbookXml(sheets));
+                zip.AddEntry("xl/_rels/workbook.xml.rels", WorkbookRelsXml(sheets.Count));
                 zip.AddEntry("xl/styles.xml", Xml(w => _styles.Write(w)));
                 zip.AddEntry("xl/sharedStrings.xml", Xml(WriteSharedStrings));
-                for (int i = 0; i < _sheets.Count; i++)
+                for (int i = 0; i < sheets.Count; i++)
                 {
-                    zip.AddEntry("xl/worksheets/sheet" + (i + 1).ToString(CultureInfo.InvariantCulture) + ".xml", _sheets[i].Xml);
+                    zip.AddEntry("xl/worksheets/sheet" + (i + 1).ToString(CultureInfo.InvariantCulture) + ".xml", sheets[i].Xml);
                 }
                 zip.Finish();
             }
+        }
+
+        // ------------------------------------------------------------------ sommaire
+
+        private static readonly Rgb SummaryHeaderFill = new Rgb(0xDD, 0xEB, 0xF7);
+        private static readonly Rgb SummaryLinkColor = new Rgb(0x05, 0x63, 0xC1);
+        private static readonly Rgb SummaryGray = new Rgb(0x7F, 0x7F, 0x7F);
+        private static readonly Rgb SummaryRule = new Rgb(0xBF, 0xBF, 0xBF);
+
+        /// <summary>
+        /// Feuille « Sommaire » : titre, puis un tableau par ligne — n° dans le document, légende complète, pages,
+        /// et nom de la feuille sous forme de lien qui y mène. Ligne d'en-tête figée.
+        /// </summary>
+        private Sheet BuildSummary()
+        {
+            string name = SummarySheetName;
+            for (int n = 2; _sheets.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)); n++)
+            {
+                name = SummarySheetName + " (" + n.ToString(CultureInfo.InvariantCulture) + ")";
+            }
+
+            var rule = new BorderLine(BorderStyle.Thin, SummaryRule);
+            int lines = _styles.GetBorderId(new CellBorders { Bottom = rule });
+            int title = _styles.GetXfId(_styles.GetFontId(new RunFormat { Bold = true, Size = 13 }), 0, 0, 0, HorizontalAlignment.General, VerticalAlignment.Bottom, false, 0);
+            int header = _styles.GetXfId(_styles.GetFontId(new RunFormat { Bold = true }), _styles.GetFillId(SummaryHeaderFill),
+                _styles.GetBorderId(new CellBorders { Bottom = new BorderLine(BorderStyle.Thin, SummaryGray) }), 0, HorizontalAlignment.General, VerticalAlignment.Center, false, 0);
+            int number = _styles.GetXfId(_styles.GetFontId(new RunFormat()), 0, lines, 0, HorizontalAlignment.Center, VerticalAlignment.Top, false, 0);
+            int text = _styles.GetXfId(_styles.GetFontId(new RunFormat()), 0, lines, 0, HorizontalAlignment.General, VerticalAlignment.Top, true, 0);
+            int none = _styles.GetXfId(_styles.GetFontId(new RunFormat { Italic = true, Color = SummaryGray }), 0, lines, 0, HorizontalAlignment.General, VerticalAlignment.Top, true, 0);
+            int pages = _styles.GetXfId(_styles.GetFontId(new RunFormat()), 0, lines, 0, HorizontalAlignment.Center, VerticalAlignment.Top, false, 0);
+            int link = _styles.GetXfId(_styles.GetFontId(new RunFormat { Color = SummaryLinkColor, Underline = UnderlineKind.Single }), 0, lines, 0,
+                HorizontalAlignment.General, VerticalAlignment.Top, false, 0);
+
+            const int headerRow = 2; // ligne 3 (base 0)
+            var rows = new List<KeyValuePair<int, SheetCell[]>>();
+            string heading = string.IsNullOrEmpty(_options.Title) ? "Tableaux exportés" : "Tableaux exportés de « " + CellTextSanitizer.CleanPlain(_options.Title) + " »";
+            rows.Add(new KeyValuePair<int, SheetCell[]>(0, new[] { Text(heading, title) }));
+            rows.Add(new KeyValuePair<int, SheetCell[]>(headerRow, new[] { Text("N°", header), Text("Légende", header), Text("Pages", header), Text("Feuille", header) }));
+            var links = new List<KeyValuePair<string, Sheet>>();
+            for (int i = 0; i < _sheets.Count; i++)
+            {
+                var sheet = _sheets[i];
+                int r = headerRow + 1 + i;
+                bool captioned = !string.IsNullOrEmpty(sheet.Caption);
+                rows.Add(new KeyValuePair<int, SheetCell[]>(r, new[]
+                {
+                    sheet.DocumentIndex > 0 ? new SheetCell { Kind = CellKind.Number, Number = sheet.DocumentIndex, Style = number } : new SheetCell { Style = number },
+                    captioned ? Text(CellTextSanitizer.CleanPlain(sheet.Caption), text) : Text("(sans légende)", none),
+                    Text(PageText(sheet.StartPage, sheet.EndPage), pages),
+                    Text(sheet.Name, link)
+                }));
+                links.Add(new KeyValuePair<string, Sheet>(ExcelUnits.CellReference(r, 3), sheet));
+            }
+
+            int lastRow = headerRow + _sheets.Count;
+            var xml = Xml(w =>
+            {
+                w.WriteStartElement("worksheet", XlsxNames.Main);
+                w.WriteAttributeString("xmlns", "r", null, XlsxNames.Relationships);
+                w.WriteStartElement("dimension");
+                w.WriteAttributeString("ref", "A1:" + ExcelUnits.CellReference(lastRow, 3));
+                w.WriteEndElement();
+                WriteSheetViews(w, true, headerRow + 1);
+                w.WriteStartElement("sheetFormatPr");
+                w.WriteAttributeString("defaultRowHeight", "15");
+                w.WriteEndElement();
+                w.WriteStartElement("cols");
+                double[] widths = { 7, 80, 10, 34 };
+                for (int c = 0; c < widths.Length; c++)
+                {
+                    w.WriteStartElement("col");
+                    w.WriteAttributeString("min", (c + 1).ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("max", (c + 1).ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("width", widths[c].ToString("0.##", CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("customWidth", "1");
+                    w.WriteEndElement();
+                }
+                w.WriteEndElement();
+
+                w.WriteStartElement("sheetData");
+                foreach (var row in rows)
+                {
+                    w.WriteStartElement("row");
+                    w.WriteAttributeString("r", (row.Key + 1).ToString(CultureInfo.InvariantCulture));
+                    if (row.Key == 0) w.WriteAttributeString("ht", "21");
+                    if (row.Key == 0) w.WriteAttributeString("customHeight", "1");
+                    for (int c = 0; c < row.Value.Length; c++) WriteCell(w, row.Key, c, row.Value[c]);
+                    w.WriteEndElement();
+                }
+                w.WriteEndElement();
+
+                // Liens internes vers chaque feuille (aucune relation nécessaire : « location » désigne une cellule du classeur).
+                w.WriteStartElement("hyperlinks");
+                foreach (var entry in links)
+                {
+                    w.WriteStartElement("hyperlink");
+                    w.WriteAttributeString("ref", entry.Key);
+                    w.WriteAttributeString("location", "'" + XmlSafe(entry.Value.Name).Replace("'", "''") + "'!A1");
+                    w.WriteAttributeString("display", XmlSafe(entry.Value.Name));
+                    w.WriteEndElement();
+                }
+                w.WriteEndElement();
+
+                WritePageMargins(w);
+                w.WriteEndElement(); // worksheet
+            });
+            return new Sheet { Name = name, Xml = xml };
+        }
+
+        private SheetCell Text(string text, int style)
+        {
+            if (string.IsNullOrEmpty(text)) return new SheetCell { Kind = CellKind.Empty, Style = style };
+            return new SheetCell { Kind = CellKind.SharedString, StringIndex = AddString(text), Style = style };
+        }
+
+        /// <summary>« 3 », « 3-4 », ou vide si les pages sont inconnues.</summary>
+        internal static string PageText(int start, int end)
+        {
+            if (start <= 0) return string.Empty;
+            if (end <= start) return start.ToString(CultureInfo.InvariantCulture);
+            return start.ToString(CultureInfo.InvariantCulture) + "-" + end.ToString(CultureInfo.InvariantCulture);
         }
 
         // ------------------------------------------------------------------ cellules
@@ -328,8 +486,9 @@ namespace WordTableToExcel.Core.Xlsx
 
         // ------------------------------------------------------------------ XML
 
+        /// <param name="frozenRows">Lignes figées en haut de la feuille (0 : aucune).</param>
         private byte[] BuildSheetXml(TableModel table, SortedDictionary<int, SortedDictionary<int, SheetCell>> cells,
-            List<string> merges, Dictionary<int, double> rowHeights, int lastRow, int lastCol, bool selected)
+            List<string> merges, Dictionary<int, double> rowHeights, int lastRow, int lastCol, bool selected, int frozenRows)
         {
             return Xml(w =>
             {
@@ -340,12 +499,7 @@ namespace WordTableToExcel.Core.Xlsx
                 w.WriteAttributeString("ref", "A1:" + ExcelUnits.CellReference(lastRow, lastCol));
                 w.WriteEndElement();
 
-                w.WriteStartElement("sheetViews");
-                w.WriteStartElement("sheetView");
-                if (selected) w.WriteAttributeString("tabSelected", "1");
-                w.WriteAttributeString("workbookViewId", "0");
-                w.WriteEndElement();
-                w.WriteEndElement();
+                WriteSheetViews(w, selected, frozenRows);
 
                 w.WriteStartElement("sheetFormatPr");
                 w.WriteAttributeString("defaultRowHeight", "15");
@@ -384,23 +538,7 @@ namespace WordTableToExcel.Core.Xlsx
                     SortedDictionary<int, SheetCell> line;
                     if (cells.TryGetValue(r, out line))
                     {
-                        foreach (var entry in line)
-                        {
-                            var cell = entry.Value;
-                            w.WriteStartElement("c");
-                            w.WriteAttributeString("r", ExcelUnits.CellReference(r, entry.Key));
-                            if (cell.Style != 0) w.WriteAttributeString("s", cell.Style.ToString(CultureInfo.InvariantCulture));
-                            if (cell.Kind == CellKind.SharedString)
-                            {
-                                w.WriteAttributeString("t", "s");
-                                w.WriteElementString("v", XlsxNames.Main, cell.StringIndex.ToString(CultureInfo.InvariantCulture));
-                            }
-                            else if (cell.Kind == CellKind.Number)
-                            {
-                                w.WriteElementString("v", XlsxNames.Main, cell.Number.ToString("R", CultureInfo.InvariantCulture));
-                            }
-                            w.WriteEndElement();
-                        }
+                        foreach (var entry in line) WriteCell(w, r, entry.Key, entry.Value);
                     }
                     w.WriteEndElement();
                 }
@@ -419,17 +557,65 @@ namespace WordTableToExcel.Core.Xlsx
                     w.WriteEndElement();
                 }
 
-                w.WriteStartElement("pageMargins");
-                w.WriteAttributeString("left", "0.7");
-                w.WriteAttributeString("right", "0.7");
-                w.WriteAttributeString("top", "0.75");
-                w.WriteAttributeString("bottom", "0.75");
-                w.WriteAttributeString("header", "0.3");
-                w.WriteAttributeString("footer", "0.3");
-                w.WriteEndElement();
+                WritePageMargins(w);
 
                 w.WriteEndElement(); // worksheet
             });
+        }
+
+        private static void WriteCell(XmlWriter w, int row, int column, SheetCell cell)
+        {
+            w.WriteStartElement("c");
+            w.WriteAttributeString("r", ExcelUnits.CellReference(row, column));
+            if (cell.Style != 0) w.WriteAttributeString("s", cell.Style.ToString(CultureInfo.InvariantCulture));
+            if (cell.Kind == CellKind.SharedString)
+            {
+                w.WriteAttributeString("t", "s");
+                w.WriteElementString("v", XlsxNames.Main, cell.StringIndex.ToString(CultureInfo.InvariantCulture));
+            }
+            else if (cell.Kind == CellKind.Number)
+            {
+                w.WriteElementString("v", XlsxNames.Main, cell.Number.ToString("R", CultureInfo.InvariantCulture));
+            }
+            w.WriteEndElement();
+        }
+
+        /// <summary>Vue de la feuille : onglet actif ou non, lignes du haut figées (volets) si <paramref name="frozenRows"/> &gt; 0.</summary>
+        private static void WriteSheetViews(XmlWriter w, bool selected, int frozenRows)
+        {
+            w.WriteStartElement("sheetViews");
+            w.WriteStartElement("sheetView");
+            if (selected) w.WriteAttributeString("tabSelected", "1");
+            w.WriteAttributeString("workbookViewId", "0");
+            if (frozenRows > 0)
+            {
+                string first = "A" + (frozenRows + 1).ToString(CultureInfo.InvariantCulture);
+                w.WriteStartElement("pane");
+                w.WriteAttributeString("ySplit", frozenRows.ToString(CultureInfo.InvariantCulture));
+                w.WriteAttributeString("topLeftCell", first);
+                w.WriteAttributeString("activePane", "bottomLeft");
+                w.WriteAttributeString("state", "frozen");
+                w.WriteEndElement();
+                w.WriteStartElement("selection");
+                w.WriteAttributeString("pane", "bottomLeft");
+                w.WriteAttributeString("activeCell", first);
+                w.WriteAttributeString("sqref", first);
+                w.WriteEndElement();
+            }
+            w.WriteEndElement();
+            w.WriteEndElement();
+        }
+
+        private static void WritePageMargins(XmlWriter w)
+        {
+            w.WriteStartElement("pageMargins");
+            w.WriteAttributeString("left", "0.7");
+            w.WriteAttributeString("right", "0.7");
+            w.WriteAttributeString("top", "0.75");
+            w.WriteAttributeString("bottom", "0.75");
+            w.WriteAttributeString("header", "0.3");
+            w.WriteAttributeString("footer", "0.3");
+            w.WriteEndElement();
         }
 
         private void WriteSharedStrings(XmlWriter w)
@@ -502,7 +688,7 @@ namespace WordTableToExcel.Core.Xlsx
             return sb == null ? text : sb.ToString();
         }
 
-        private byte[] ContentTypesXml()
+        private static byte[] ContentTypesXml(int sheetCount)
         {
             return Xml(w =>
             {
@@ -510,7 +696,7 @@ namespace WordTableToExcel.Core.Xlsx
                 Default(w, "rels", "application/vnd.openxmlformats-package.relationships+xml");
                 Default(w, "xml", "application/xml");
                 Override(w, "/xl/workbook.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
-                for (int i = 0; i < _sheets.Count; i++)
+                for (int i = 0; i < sheetCount; i++)
                 {
                     Override(w, "/xl/worksheets/sheet" + (i + 1).ToString(CultureInfo.InvariantCulture) + ".xml",
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
@@ -535,7 +721,7 @@ namespace WordTableToExcel.Core.Xlsx
             });
         }
 
-        private byte[] WorkbookXml()
+        private static byte[] WorkbookXml(List<Sheet> sheets)
         {
             return Xml(w =>
             {
@@ -547,10 +733,10 @@ namespace WordTableToExcel.Core.Xlsx
                 w.WriteEndElement();
                 w.WriteEndElement();
                 w.WriteStartElement("sheets");
-                for (int i = 0; i < _sheets.Count; i++)
+                for (int i = 0; i < sheets.Count; i++)
                 {
                     w.WriteStartElement("sheet");
-                    w.WriteAttributeString("name", XmlSafe(_sheets[i].Name));
+                    w.WriteAttributeString("name", XmlSafe(sheets[i].Name));
                     w.WriteAttributeString("sheetId", (i + 1).ToString(CultureInfo.InvariantCulture));
                     w.WriteAttributeString("id", XlsxNames.Relationships, "rId" + (i + 1).ToString(CultureInfo.InvariantCulture));
                     w.WriteEndElement();
@@ -560,20 +746,20 @@ namespace WordTableToExcel.Core.Xlsx
             });
         }
 
-        private byte[] WorkbookRelsXml()
+        private static byte[] WorkbookRelsXml(int sheetCount)
         {
             return Xml(w =>
             {
                 w.WriteStartElement("Relationships", XlsxNames.PackageRelationships);
-                for (int i = 0; i < _sheets.Count; i++)
+                for (int i = 0; i < sheetCount; i++)
                 {
                     Relationship(w, "rId" + (i + 1).ToString(CultureInfo.InvariantCulture),
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
                         "worksheets/sheet" + (i + 1).ToString(CultureInfo.InvariantCulture) + ".xml");
                 }
-                Relationship(w, "rId" + (_sheets.Count + 1).ToString(CultureInfo.InvariantCulture),
+                Relationship(w, "rId" + (sheetCount + 1).ToString(CultureInfo.InvariantCulture),
                     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", "styles.xml");
-                Relationship(w, "rId" + (_sheets.Count + 2).ToString(CultureInfo.InvariantCulture),
+                Relationship(w, "rId" + (sheetCount + 2).ToString(CultureInfo.InvariantCulture),
                     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings", "sharedStrings.xml");
                 w.WriteEndElement();
             });

@@ -20,6 +20,23 @@ namespace WordTableToExcel.Word
         /// <summary>wdFieldNoteRef : renvoi vers une note de bas de page ou de fin.</summary>
         public const int FieldNoteRef = 72;
 
+        /// <summary>
+        /// Le document contient-il des modifications suivies (acceptées ou non) ? Une seule question à Word : sans
+        /// modification suivie, toutes les recherches de suppressions (par tableau, par légende…) sont inutiles, et
+        /// Word peut être lent à les faire. En cas de doute, on répond oui (les recherches ont lieu).
+        /// </summary>
+        public static bool DocumentHasRevisions(object documentObject)
+        {
+            try
+            {
+                return WordCom.AsInt(((dynamic)documentObject).Revisions.Count) > 0;
+            }
+            catch (Exception)
+            {
+                return true;
+            }
+        }
+
         /// <summary>Intervalles [début, fin[ supprimés en suivi des modifications dans la plage (acceptés ou non).</summary>
         public static List<int[]> DeletedIntervals(object rangeObject)
         {

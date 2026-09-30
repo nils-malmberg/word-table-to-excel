@@ -79,6 +79,8 @@ namespace WordTableToExcel.Core.Layout
         public readonly List<string> XmlTextVariants = new List<string>();
         /// <summary>Images et objets (dessins, formes, zones de texte, objets OLE) du tableau : non exportés.</summary>
         public int ObjectCount;
+        /// <summary>Lignes d'en-tête du haut du tableau répétées sur chaque page (w:tblHeader).</summary>
+        public int HeaderRowCount;
 
         /// <summary>Cellules visibles qui commencent sur la ligne Word donnée, dans l'ordre.</summary>
         public List<LayoutCell> CellsStartingOnSourceRow(int sourceRow)

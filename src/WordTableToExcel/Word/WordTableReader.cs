@@ -53,6 +53,12 @@ namespace WordTableToExcel.Word
         /// </summary>
         public bool LastReadCellByCell { get; private set; }
 
+        /// <summary>
+        /// Chercher les suppressions suivies dans les tableaux lus cellule par cellule ; inutile, et évité, si le
+        /// document n'a aucune modification suivie (voir <see cref="WordRevisions.DocumentHasRevisions"/>).
+        /// </summary>
+        public bool CheckRevisions { get; set; } = true;
+
         public WordTableReader(object document, Action<string> log)
         {
             if (document == null) throw new ArgumentNullException("document");
@@ -102,6 +108,7 @@ namespace WordTableToExcel.Word
             model.ColumnWidthsPt = layout.ColumnWidthsPt;
             model.RowHeightsPt = layout.RowHeightsPt;
             model.RowHeightExact = layout.RowHeightExact;
+            model.HeaderRowCount = layout.HeaderRowCount;
 
             int done = 0;
             foreach (var lc in layout.Cells)
@@ -295,7 +302,7 @@ namespace WordTableToExcel.Word
             var intervals = new List<int[]>();
             try
             {
-                intervals.AddRange(WordRevisions.DeletedIntervals((object)table.Range));
+                if (CheckRevisions) intervals.AddRange(WordRevisions.DeletedIntervals((object)table.Range));
             }
             catch (Exception ex)
             {

@@ -24,6 +24,8 @@ namespace WordTableToExcel.Export
     {
         /// <summary>Tableaux lus dans leur XML : références à Word libérées tous les N tableaux.</summary>
         private const int ReleaseEveryTables = 20;
+        /// <summary>Au-delà de ce nombre de tableaux, l'analyse du document s'affiche dans une fenêtre de progression.</summary>
+        private const int ScanProgressThreshold = 15;
 
         private readonly dynamic _application;
 
@@ -68,14 +70,30 @@ namespace WordTableToExcel.Export
                 }
 
                 var settings = Settings.Load();
-                CaptionPosition convention;
-                List<TableEntry> tables;
-                int deletedTables;
+                // Une seule question à Word : sans modification suivie, aucune recherche de suppressions ensuite.
+                bool revisions = WordRevisions.DocumentHasRevisions(documentObject);
+                CaptionPosition convention = CaptionPosition.None;
+                List<TableEntry> tables = null;
+                int deletedTables = 0;
                 Cursor previousCursor = Cursor.Current;
                 try
                 {
-                    Cursor.Current = Cursors.WaitCursor;
-                    tables = ScanTables(documentObject, tableCount, settings, out convention, out deletedTables);
+                    if (tableCount > ScanProgressThreshold)
+                    {
+                        // Gros document : légendes, pages et suppressions de chaque tableau, avec progression et annulation.
+                        ProgressDialog.Run(owner, "Analyse du document",
+                            progress => tables = ScanTables(documentObject, tableCount, settings, revisions, progress, out convention, out deletedTables));
+                    }
+                    else
+                    {
+                        Cursor.Current = Cursors.WaitCursor;
+                        tables = ScanTables(documentObject, tableCount, settings, revisions, null, out convention, out deletedTables);
+                    }
+                }
+                catch (ExportFailedException ex)
+                {
+                    if (ex.InnerException is OperationCanceledException) return; // analyse annulée : rien d'autre à faire
+                    throw;
                 }
                 finally
                 {
@@ -91,21 +109,23 @@ namespace WordTableToExcel.Export
                 }
 
                 string documentName = WordCom.AsString(document.Name);
-                bool allTables, includeCaption, convertNumbers;
+                bool allTables, includeCaption, convertNumbers, includeSummary;
                 CaptionPosition captionPosition;
                 ICollection<int> excluded;
-                using (var dialog = new ExportDialog(documentName, tables, convention, settings.ExportCaptionPosition, settings.AllTables, settings.IncludeCaptionRow, settings.ConvertNumbers, deletedTables))
+                using (var dialog = new ExportDialog(documentName, tables, convention, settings.ExportCaptionPosition, settings.AllTables, settings.IncludeCaptionRow, settings.ConvertNumbers, settings.ExportSummary, deletedTables))
                 {
                     if (dialog.ShowDialog(owner) != DialogResult.OK) return;
                     allTables = dialog.AllTables;
                     includeCaption = dialog.IncludeCaptionRow;
                     convertNumbers = dialog.ConvertNumbers;
+                    includeSummary = dialog.IncludeSummary;
                     captionPosition = dialog.CaptionPositionChoice; // légendes déjà réattribuées si elle a changé
                     excluded = dialog.ExcludedTables;
                 }
                 settings.AllTables = allTables;
                 settings.IncludeCaptionRow = includeCaption;
                 settings.ConvertNumbers = convertNumbers;
+                settings.ExportSummary = includeSummary;
                 settings.ExportCaptionPosition = captionPosition;
 
                 var plan = ExportPlan.Build(tables, allTables, excluded);
@@ -125,14 +145,15 @@ namespace WordTableToExcel.Export
                     IncludeCaptionRow = includeCaption,
                     ConvertNumbers = convertNumbers,
                     NumberCulture = CultureInfo.CurrentCulture,
-                    Title = Path.GetFileNameWithoutExtension(documentName)
+                    Title = Path.GetFileNameWithoutExtension(documentName),
+                    IncludeSummary = includeSummary && plan.Count >= 2 // inutile pour un seul tableau
                 };
 
                 var report = new ExportReport();
                 try
                 {
                     bool fromXml = ReadContentFromXml;
-                    ProgressDialog.Run(owner, "Export des tableaux vers Excel", progress => Export(documentObject, plan, options, path, fromXml, progress, report));
+                    ProgressDialog.Run(owner, "Export des tableaux vers Excel", progress => Export(documentObject, plan, options, path, fromXml, revisions, progress, report));
                 }
                 catch (ExportFailedException ex)
                 {
@@ -178,8 +199,11 @@ namespace WordTableToExcel.Export
 
         // ------------------------------------------------------------------ détection
 
+        /// <param name="revisions">Le document contient des modifications suivies (sinon, aucune recherche de suppressions).</param>
+        /// <param name="progress">Progression et annulation (null : pas de fenêtre de progression).</param>
         /// <param name="deletedTables">Nombre de tableaux supprimés en suivi des modifications, écartés de la liste.</param>
-        private static List<TableEntry> ScanTables(object documentObject, int tableCount, Settings settings, out CaptionPosition convention, out int deletedTables)
+        private static List<TableEntry> ScanTables(object documentObject, int tableCount, Settings settings, bool revisions, IExportProgress progress,
+            out CaptionPosition convention, out int deletedTables)
         {
             deletedTables = 0;
             dynamic document = documentObject;
@@ -194,14 +218,20 @@ namespace WordTableToExcel.Export
                 // Collection absente ou libellé supprimé : les libellés intégrés suffisent.
             }
 
-            var scanner = new WordCaptionScanner(documentObject, new CaptionMatcher(labels), Log.Info);
+            var scanner = new WordCaptionScanner(documentObject, new CaptionMatcher(labels), Log.Info) { CheckRevisions = revisions };
             var contexts = new List<TableCaptionContext>();
             var pages = new List<int[]>();
             int index = 0;
             foreach (dynamic table in document.Tables)
             {
                 index++;
-                if (IsDeletedTable((object)table, index))
+                if (progress != null)
+                {
+                    if (progress.IsCancellationRequested) throw new OperationCanceledException();
+                    progress.Report(string.Format(CultureInfo.CurrentCulture, "Recherche des légendes et des pages : tableau {0} sur {1}…", index, tableCount),
+                        (double)index / Math.Max(1, tableCount));
+                }
+                if (revisions && IsDeletedTable((object)table, index))
                 {
                     // Supprimé en suivi des modifications (accepté ou non) : ni exporté, ni candidat à une légende.
                     deletedTables++;
@@ -352,10 +382,10 @@ namespace WordTableToExcel.Export
         // ------------------------------------------------------------------ export
 
         private static void Export(object documentObject, List<PlannedSheet> plan, XlsxExportOptions options, string path, bool contentFromXml,
-            IExportProgress progress, ExportReport report)
+            bool revisions, IExportProgress progress, ExportReport report)
         {
             dynamic document = documentObject;
-            var reader = new WordTableReader(documentObject, Log.Info) { ReadContentFromXml = contentFromXml };
+            var reader = new WordTableReader(documentObject, Log.Info) { ReadContentFromXml = contentFromXml, CheckRevisions = revisions };
             var writer = new XlsxWorkbookWriter(options);
             var stopwatch = Stopwatch.StartNew();
 
@@ -406,6 +436,8 @@ namespace WordTableToExcel.Export
                 model.Caption = item.Table.Caption;
                 model.CaptionPosition = item.Table.CaptionPosition;
                 model.SheetName = item.SheetName;
+                model.StartPage = item.Table.StartPage;
+                model.EndPage = item.Table.EndPage;
                 writer.AddTable(model);
                 report.Exported++;
                 foreach (var omission in model.Omissions)
