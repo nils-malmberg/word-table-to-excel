@@ -42,6 +42,7 @@ namespace WordTableToExcel.App
                 Application.ThreadException += (s, e) => Messages.Error(null, "Erreur inattendue de l'application.", e.Exception, false);
                 AppDomain.CurrentDomain.UnhandledException += (s, e) => Log.Error("Erreur fatale", e.ExceptionObject as Exception);
                 Log.Info("Démarrage de l'application " + MainForm.Version + ", .NET " + Environment.Version + ", " + (IntPtr.Size * 8) + " bits.");
+                HiddenWord.CleanUpOrphan(); // Word invisible laissé ouvert par un arrêt brutal précédent
 
                 using (var filter = OleMessageFilter.Register())
                 {

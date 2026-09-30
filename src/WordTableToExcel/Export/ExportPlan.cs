@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using WordTableToExcel.Core.Captions;
 using WordTableToExcel.Core.Model;
 
@@ -15,6 +16,10 @@ namespace WordTableToExcel.Export
         public int StartPage;
         /// <summary>Page où se termine le tableau (0 : inconnue).</summary>
         public int EndPage;
+        /// <summary>Légende candidate juste au-dessus du tableau (null : aucune).</summary>
+        public CaptionCandidate CaptionAbove;
+        /// <summary>Légende candidate juste au-dessous du tableau (null : aucune).</summary>
+        public CaptionCandidate CaptionBelow;
 
         public bool HasCaption
         {
@@ -35,6 +40,23 @@ namespace WordTableToExcel.Export
     /// </summary>
     public static class ExportPlan
     {
+        /// <summary>
+        /// (Ré)attribue à chaque tableau sa légende parmi ses candidates, selon la position choisie par l'utilisateur
+        /// (Above, Below) ou, avec None, selon la convention détectée dans le document. Renvoie cette convention détectée.
+        /// </summary>
+        public static CaptionPosition AssignCaptions(IList<TableEntry> tables, CaptionPosition position)
+        {
+            var contexts = tables.Select(t => new TableCaptionContext { TableIndex = t.Index, Above = t.CaptionAbove, Below = t.CaptionBelow }).ToList();
+            CaptionPosition detected;
+            var assignments = CaptionAssigner.Assign(contexts, position, out detected);
+            for (int i = 0; i < tables.Count; i++)
+            {
+                tables[i].Caption = assignments[i].Caption == null ? null : assignments[i].Caption.Text;
+                tables[i].CaptionPosition = assignments[i].Position;
+            }
+            return detected;
+        }
+
         /// <summary>Tableaux proposés par l'option A ou B (avant les cases décochées).</summary>
         public static bool IsCandidate(TableEntry table, bool allTables)
         {

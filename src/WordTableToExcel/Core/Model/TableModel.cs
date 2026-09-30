@@ -30,13 +30,21 @@ namespace WordTableToExcel.Core.Model
         public double[] RowHeightsPt;
         /// <summary>true si la hauteur de ligne Word est « exacte » (sinon « au moins »).</summary>
         public bool[] RowHeightExact;
-        /// <summary>Nombre de lignes d'en-tête à répéter en haut de chaque page (import Excel → Word).</summary>
+        /// <summary>
+        /// Nombre de lignes d'en-tête répétées en haut de chaque page : lues dans Word à l'export (figées dans Excel),
+        /// écrites dans Word à l'import.
+        /// </summary>
         public int HeaderRowCount;
+        /// <summary>Pages du document Word où le tableau commence et se termine (0 : inconnues ; export, feuille Sommaire).</summary>
+        public int StartPage;
+        public int EndPage;
         /// <summary>Tableau de droite à gauche (feuille Excel en mode « de droite à gauche »).</summary>
         public bool RightToLeft;
 
         /// <summary>Remarques non bloquantes rencontrées lors de la lecture (affichées dans le rapport final).</summary>
         public readonly List<string> Warnings = new List<string>();
+        /// <summary>Informations du tableau absentes du classeur (images, texte coupé…) : signalées en tête du rapport final.</summary>
+        public readonly List<string> Omissions = new List<string>();
 
         public bool HasCaption
         {

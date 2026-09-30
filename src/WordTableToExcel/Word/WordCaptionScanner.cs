@@ -24,6 +24,12 @@ namespace WordTableToExcel.Word
         private string _captionStyleName;
         private bool _captionStyleResolved;
 
+        /// <summary>
+        /// Chercher les passages supprimés en suivi des modifications dans les paragraphes voisins (une légende supprimée
+        /// n'en est plus une) ; inutile, et évité, si le document n'a aucune modification suivie.
+        /// </summary>
+        public bool CheckRevisions { get; set; } = true;
+
         public WordCaptionScanner(object document, CaptionMatcher matcher, Action<string> log)
         {
             if (document == null) throw new ArgumentNullException("document");
@@ -78,7 +84,8 @@ namespace WordTableToExcel.Word
                 dynamic range = paragraph.Range;
                 if (WordCom.AsInt(range.Tables.Count) > 0) return null; // on est arrivé dans un autre tableau
 
-                string text = WordCom.AsString(range.Text);
+                // Texte sans les passages supprimés en suivi des modifications : une légende supprimée n'en est plus une.
+                string text = CheckRevisions ? WordRevisions.VisibleText((object)range) : WordCom.AsString(range.Text);
                 string clean = CaptionMatcher.CleanCaptionText(text);
                 if (clean.Length == 0)
                 {

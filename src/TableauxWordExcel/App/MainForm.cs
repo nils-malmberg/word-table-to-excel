@@ -42,6 +42,9 @@ namespace WordTableToExcel.App
         private readonly CheckBox _topMost;
         private readonly ContextMenuStrip _fileMenu;
         private readonly Font _boldListFont;
+        /// <summary>Word invisible des exports de fichiers non ouverts, gardé quelques minutes entre deux exports.</summary>
+        private readonly HiddenWord _hiddenWord = new HiddenWord();
+        private readonly Timer _idleTimer;
 
         private readonly List<string> _files = new List<string>();
         private readonly string[] _arguments;
@@ -205,6 +208,10 @@ namespace WordTableToExcel.App
             RestoreWindow();
             ShowInsertion(null, false, false);
             UpdateButtons();
+
+            _idleTimer = new Timer { Interval = 5000 };
+            _idleTimer.Tick += (s, e) => CheckHiddenWord();
+            _idleTimer.Start();
         }
 
         // ------------------------------------------------------------------ construction
@@ -332,7 +339,37 @@ namespace WordTableToExcel.App
             {
                 Log.Error("Enregistrement de la position de la fenêtre", ex);
             }
+            _idleTimer.Stop();
+            try
+            {
+                using (OleMessageFilter.Timeout(OleMessageFilter.RefreshTimeoutMs))
+                {
+                    _hiddenWord.Dispose(); // Word invisible refermé (ou rendu à l'utilisateur s'il contient un de ses documents)
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Fermeture du Word invisible", ex);
+            }
             base.OnFormClosing(e);
+        }
+
+        /// <summary>Toutes les 5 secondes, hors opération : Word invisible refermé après inactivité, ou rendu à l'utilisateur.</summary>
+        private void CheckHiddenWord()
+        {
+            if (_busy || !_hiddenWord.IsRunning) return;
+            try
+            {
+                using (OleMessageFilter.Timeout(OleMessageFilter.RefreshTimeoutMs))
+                {
+                    _hiddenWord.CheckIdle();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Surveillance du Word invisible", ex);
+            }
+            if (!_hiddenWord.IsRunning) RefreshFromWord(true); // Word rendu visible : ses documents apparaissent dans la liste
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -661,20 +698,22 @@ namespace WordTableToExcel.App
                 return;
             }
 
-            HiddenWordDocument hidden = null;
+            object document = null;
             try
             {
                 ProgressDialog.Run(this, "Ouverture du document", progress =>
                 {
-                    progress.Report("Ouverture de « " + entry.Name + " » par Word, en arrière-plan (lecture seule)…", 0.3);
-                    hidden = HiddenWordDocument.Open(entry.FullName);
+                    progress.Report(_hiddenWord.IsRunning
+                        ? "Ouverture de « " + entry.Name + " » en arrière-plan (lecture seule)…"
+                        : "Démarrage de Word en arrière-plan, puis ouverture de « " + entry.Name + " » (lecture seule)…", 0.3);
+                    document = _hiddenWord.Open(entry.FullName);
                     if (progress.IsCancellationRequested) throw new OperationCanceledException();
                     progress.Report("Document ouvert.", 1);
                 });
             }
             catch (ExportFailedException ex)
             {
-                if (hidden != null) hidden.Dispose();
+                _hiddenWord.CloseDocument();
                 if (ex.InnerException is OperationCanceledException) return;
                 var inner = ex.InnerException ?? ex;
                 Log.Error("Ouverture en arrière-plan de " + entry.FullName, inner);
@@ -685,9 +724,14 @@ namespace WordTableToExcel.App
                 return;
             }
 
-            using (hidden)
+            try
             {
-                new ExportService(hidden.Application) { ReadContentFromXml = true }.Run(this, hidden.Document);
+                new ExportService(_hiddenWord.Application) { ReadContentFromXml = true }.Run(this, document);
+            }
+            finally
+            {
+                // Document refermé ; Word reste prêt quelques minutes pour l'export suivant.
+                _hiddenWord.CloseDocument();
             }
         }
 

@@ -290,5 +290,112 @@ namespace WordTableToExcel.Tests
             // Pas de limite de longueur (contrairement au texte d'une cellule Excel).
             Assert.Equal(40000, CellTextSanitizer.Comparable(new string('x', 40000)).Length);
         }
+
+        // ------------------------------------------------------------------ suivi des modifications
+
+        private static bool HasVariant(TableLayout layout, string comparable)
+        {
+            return layout.XmlTextVariants.Any(v => CellTextSanitizer.Comparable(v) == comparable);
+        }
+
+        [Fact]
+        public void TrackedDeletions_AreNeverExported_EvenIfNotAccepted()
+        {
+            var layout = ParseCells(
+                Row("<w:p><w:r><w:t>En-tête</w:t></w:r></w:p>")
+                + Row(@"<w:p><w:r><w:t xml:space=""preserve"">Prix </w:t></w:r><w:del w:id=""1"" w:author=""A""><w:r><w:delText>120</w:delText></w:r></w:del>"
+                    + @"<w:ins w:id=""2"" w:author=""A""><w:r><w:t>150</w:t></w:r></w:ins>"
+                    + @"<w:moveFrom w:id=""3"" w:author=""A""><w:r><w:t>déplacé</w:t></w:r></w:moveFrom></w:p>")
+                // Marque de paragraphe supprimée : les deux paragraphes n'en font plus qu'un.
+                + Row(@"<w:p><w:pPr><w:rPr><w:del w:id=""4"" w:author=""A""/></w:rPr></w:pPr><w:r><w:t>ab</w:t></w:r></w:p><w:p><w:r><w:t>cd</w:t></w:r></w:p>"));
+
+            Assert.Equal("Prix 150", Text(At(layout, 1, 0)));
+            Assert.Equal("abcd", Text(At(layout, 2, 0)));
+
+            // Vérification avec le texte de Word : acceptée qu'il contienne le texte supprimé ou non.
+            Assert.True(HasVariant(layout, "En-têtePrix150abcd"));
+            Assert.True(HasVariant(layout, "En-têtePrix120150déplacéabcd"));
+            Assert.Equal("En-têtePrix150abcd", CellTextSanitizer.Comparable(layout.XmlText));
+        }
+
+        [Fact]
+        public void TrackedDeletedRows_AreRemovedFromTheTable()
+        {
+            const string deletedRow = @"<w:tr><w:trPr><w:del w:id=""9"" w:author=""A""/></w:trPr><w:tc><w:p><w:del w:id=""10"" w:author=""A""><w:r><w:delText>Supprimée</w:delText></w:r></w:del></w:p></w:tc><w:tc><w:p><w:del w:id=""11"" w:author=""A""><w:r><w:delText>0</w:delText></w:r></w:del></w:p></w:tc></w:tr>";
+            var layout = ParseCells(
+                Row("<w:p><w:r><w:t>Région</w:t></w:r></w:p>", "<w:p><w:r><w:t>Valeur</w:t></w:r></w:p>")
+                + deletedRow
+                + Row("<w:p><w:r><w:t>Nord</w:t></w:r></w:p>", "<w:p><w:r><w:t>12</w:t></w:r></w:p>"));
+
+            Assert.Equal(2, layout.RowCount);
+            Assert.Equal(3, layout.SourceRowCount);
+            Assert.Contains(1, layout.DeletedRows);
+            Assert.Equal("Nord", Text(At(layout, 1, 0)));
+            Assert.Equal(2, At(layout, 1, 0).SourceRow); // rang dans Word, pour la lecture de secours
+            Assert.DoesNotContain(layout.Cells, c => Text(c).Contains("Supprimée"));
+            Assert.True(HasVariant(layout, "RégionValeurSupprimée0Nord12"));
+            Assert.True(HasVariant(layout, "RégionValeurNord12"));
+        }
+
+        [Fact]
+        public void TableWhoseRowsAreAllDeleted_IsEmpty()
+        {
+            var layout = ParseCells(@"<w:tr><w:trPr><w:del w:id=""1"" w:author=""A""/></w:trPr><w:tc><w:p><w:del w:id=""2"" w:author=""A""><w:r><w:delText>x</w:delText></w:r></w:del></w:p></w:tc></w:tr>");
+            Assert.Equal(0, layout.RowCount);
+            Assert.Empty(layout.Cells);
+        }
+
+        // ------------------------------------------------------------------ renvois et appels de notes
+
+        private const string NoteStyles = Styles + @"
+<w:style w:type=""character"" w:styleId=""Appelnotedebasdep""><w:name w:val=""footnote reference""/><w:rPr><w:vertAlign w:val=""superscript""/></w:rPr></w:style>
+<w:style w:type=""character"" w:styleId=""AppelPerso""><w:name w:val=""Appel perso""/><w:basedOn w:val=""Appelnotedebasdep""/></w:style>
+<w:style w:type=""character"" w:styleId=""Appelnotedefin""><w:name w:val=""endnote reference""/><w:rPr><w:vertAlign w:val=""superscript""/></w:rPr></w:style>";
+
+        [Fact]
+        public void NoteReferences_AreNotExported()
+        {
+            var layout = ParseCells(
+                Row("<w:p><w:r><w:t>En-tête</w:t></w:r></w:p>")
+                // Renvoi (Insertion › Renvoi › Note de bas de page) : champ NOTEREF dont le résultat est un chiffre.
+                + Row(@"<w:p><w:r><w:t>12,5</w:t></w:r><w:r><w:fldChar w:fldCharType=""begin""/></w:r><w:r><w:instrText xml:space=""preserve""> NOTEREF _Ref4521 \h </w:instrText></w:r>"
+                    + @"<w:r><w:fldChar w:fldCharType=""separate""/></w:r><w:r><w:t>3</w:t></w:r><w:r><w:fldChar w:fldCharType=""end""/></w:r></w:p>")
+                + Row(@"<w:p><w:r><w:t>48</w:t></w:r><w:fldSimple w:instr="" NOTEREF _Ref4522 \f \h ""><w:r><w:t>4</w:t></w:r></w:fldSimple></w:p>")
+                // Appels de note : marque automatique (sans texte) ou texte au style « Appel de note ».
+                + Row(@"<w:p><w:r><w:t>7</w:t></w:r><w:r><w:rPr><w:rStyle w:val=""Appelnotedebasdep""/></w:rPr><w:footnoteReference w:id=""2""/></w:r>"
+                    + @"<w:r><w:rPr><w:rStyle w:val=""AppelPerso""/></w:rPr><w:t>5</w:t></w:r><w:r><w:rPr><w:rStyle w:val=""Appelnotedefin""/></w:rPr><w:t>i</w:t></w:r></w:p>")
+                // Un exposant ordinaire (m²) reste, en exposant.
+                + Row(@"<w:p><w:r><w:t>m</w:t></w:r><w:r><w:rPr><w:vertAlign w:val=""superscript""/></w:rPr><w:t>2</w:t></w:r></w:p>"),
+                styles: NoteStyles);
+
+            Assert.Equal("12,5", Text(At(layout, 1, 0)));
+            Assert.Single(Runs(At(layout, 1, 0))); // valeur de mise en forme uniforme : convertible en nombre
+            Assert.Equal("48", Text(At(layout, 2, 0)));
+            Assert.Equal("7", Text(At(layout, 3, 0)));
+            Assert.Equal("m2", Text(At(layout, 4, 0)));
+            Assert.Equal(VerticalPosition.Superscript, Runs(At(layout, 4, 0)).Last().Format.Position);
+
+            // Le texte de Word contient le résultat des renvois : la vérification en tient compte.
+            Assert.Equal("En-tête12,5348475im2", CellTextSanitizer.Comparable(layout.XmlText));
+        }
+    }
+
+    public class WordRevisionsTests
+    {
+        [Fact]
+        public void Intervals_NormalizeSubtractCover()
+        {
+            var merged = WordTableToExcel.Word.WordRevisions.Normalize(new List<int[]> { new[] { 10, 12 }, new[] { 3, 5 }, new[] { 4, 8 }, new[] { 20, 20 } });
+            Assert.Equal(new[] { "3-8", "10-12" }, merged.Select(i => i[0] + "-" + i[1]));
+
+            var pieces = WordTableToExcel.Word.WordRevisions.Subtract(0, 15, merged);
+            Assert.Equal(new[] { "0-3", "8-10", "12-15" }, pieces.Select(i => i[0] + "-" + i[1]));
+            Assert.Equal(new[] { "0-15" }, WordTableToExcel.Word.WordRevisions.Subtract(0, 15, null).Select(i => i[0] + "-" + i[1]));
+            Assert.Empty(WordTableToExcel.Word.WordRevisions.Subtract(4, 7, merged));
+
+            Assert.True(WordTableToExcel.Word.WordRevisions.Covers(merged, 3, 8));
+            Assert.False(WordTableToExcel.Word.WordRevisions.Covers(merged, 3, 11));
+            Assert.False(WordTableToExcel.Word.WordRevisions.Covers(merged, 5, 5));
+        }
     }
 }

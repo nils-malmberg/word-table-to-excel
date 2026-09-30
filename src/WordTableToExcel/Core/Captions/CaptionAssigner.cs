@@ -42,17 +42,24 @@ namespace WordTableToExcel.Core.Captions
     }
 
     /// <summary>
-    /// Associe chaque tableau à sa légende en déterminant automatiquement la convention du
-    /// document (légendes au-dessus ou au-dessous). Une même légende n'est jamais attribuée
-    /// à deux tableaux : entre deux tableaux consécutifs, elle revient à celui qui respecte
-    /// la convention majoritaire.
+    /// Associe chaque tableau à sa légende selon la convention du document (légendes au-dessus ou au-dessous),
+    /// détectée automatiquement ou choisie par l'utilisateur. Une même légende n'est jamais attribuée
+    /// à deux tableaux : entre deux tableaux consécutifs, elle revient à celui qui respecte la convention.
     /// </summary>
     public static class CaptionAssigner
     {
+        /// <summary>Attribution selon la convention détectée (renvoyée dans <paramref name="convention"/>).</summary>
         public static CaptionAssignment[] Assign(IList<TableCaptionContext> tables, out CaptionPosition convention)
         {
-            convention = DetectConvention(tables);
-            bool preferAbove = convention != CaptionPosition.Below;
+            return Assign(tables, CaptionPosition.None, out convention);
+        }
+
+        /// <param name="position">Position des légendes choisie par l'utilisateur (Above, Below) ; None : convention détectée.</param>
+        /// <param name="detected">Convention détectée dans le document, renvoyée même si la position est imposée (pour l'afficher).</param>
+        public static CaptionAssignment[] Assign(IList<TableCaptionContext> tables, CaptionPosition position, out CaptionPosition detected)
+        {
+            detected = DetectConvention(tables);
+            bool preferAbove = (position == CaptionPosition.None ? detected : position) != CaptionPosition.Below;
 
             var result = new CaptionAssignment[tables.Count];
             var claimed = new HashSet<int>();

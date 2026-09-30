@@ -8,6 +8,7 @@ using System.Windows.Forms;
 using WordTableToExcel.Core.Captions;
 using WordTableToExcel.Core.ExcelImport;
 using WordTableToExcel.Core.Model;
+using WordTableToExcel.Core.Xlsx;
 using WordTableToExcel.Infrastructure;
 using WordTableToExcel.UI;
 using WordTableToExcel.Word;
@@ -390,9 +391,11 @@ namespace WordTableToExcel.Import
                     }
                     candidate.Range = range;
                     candidate.DetectedRange = range;
-                    // Cochée par défaut si visible et importable telle quelle (sinon l'utilisateur ajuste la plage).
+                    // Cochée par défaut si visible et importable telle quelle (sinon l'utilisateur ajuste la plage), sauf la
+                    // feuille « Sommaire » d'un classeur exporté par l'outil (liste des tableaux, pas un tableau du document).
                     candidate.Selected = info.IsVisible && range.Value.ColumnCount <= SheetConverter.MaxWordColumns
-                        && (long)range.Value.RowCount * range.Value.ColumnCount <= SheetConverter.MaxCells;
+                        && (long)range.Value.RowCount * range.Value.ColumnCount <= SheetConverter.MaxCells
+                        && !XlsxWorkbookWriter.IsSummarySheetName(info.Name);
                 }
                 catch (ExcelImportException ex)
                 {

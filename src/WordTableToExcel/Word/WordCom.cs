@@ -71,6 +71,17 @@ namespace WordTableToExcel.Word
             return Math.Abs(value - Undefined) < 0.5;
         }
 
+        /// <summary>
+        /// Libère les objets de Word devenus inutiles (plages, polices, cellules… déjà lues) : .NET ne rend ces
+        /// références à Word qu'au passage du ramasse-miettes, déclenché par sa propre mémoire et non par celle de Word.
+        /// Sans cela, Word garde chaque objet renvoyé jusqu'à la fin de l'opération et grossit pendant les longs exports.
+        /// </summary>
+        public static void ReleaseUnusedReferences()
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
         /// <summary>Version de Word (« 16.0 ») ; « ? » si inconnue.</summary>
         public static string WordVersion(object application)
         {

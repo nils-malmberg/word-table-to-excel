@@ -24,6 +24,12 @@ namespace WordTableToExcel.UI
             return MessageBox.Show(owner, text, Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1) == DialogResult.Yes;
         }
 
+        /// <summary>Question accompagnée d'un avertissement (icône « attention »).</summary>
+        public static bool AskWarning(IWin32Window owner, string text)
+        {
+            return MessageBox.Show(owner, text, Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1) == DialogResult.Yes;
+        }
+
         /// <summary>Affiche une erreur inattendue ; l'extension ne laisse jamais une exception remonter jusqu'à Word.</summary>
         public static void Error(IWin32Window owner, string context, Exception ex)
         {

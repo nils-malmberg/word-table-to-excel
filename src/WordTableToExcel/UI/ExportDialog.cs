@@ -10,9 +10,9 @@ using WordTableToExcel.Export;
 namespace WordTableToExcel.UI
 {
     /// <summary>
-    /// Boîte de dialogue principale : choix entre l'option A (tableaux avec légende) et
-    /// l'option B (tous les tableaux), liste des tableaux proposés (cases à cocher, pages de début et de fin,
-    /// feuille Excel créée), options.
+    /// Boîte de dialogue principale : position des légendes (détection automatique, dont le résultat est affiché,
+    /// ou choix de l'utilisateur), choix entre l'option A (tableaux avec légende) et l'option B (tous les tableaux),
+    /// liste des tableaux proposés (cases à cocher, pages de début et de fin, feuille Excel créée, légende), options.
     /// </summary>
     internal sealed class ExportDialog : Form
     {
@@ -24,9 +24,14 @@ namespace WordTableToExcel.UI
         private const int ColumnCaption = 5;
 
         private readonly IList<TableEntry> _tables;
+        private readonly int _deletedTables;
+        private readonly Label _summary;
+        private readonly ComboBox _captionSide;
+        private readonly Label _captionedHint;
         private readonly RadioButton _captionedOnly;
         private readonly RadioButton _allTables;
         private readonly CheckBox _includeCaption;
+        private readonly CheckBox _includeSummary;
         private readonly CheckBox _convertNumbers;
         private readonly DataGridView _preview;
         private readonly SelectAllHeader _selectAll;
@@ -38,11 +43,16 @@ namespace WordTableToExcel.UI
         private readonly List<TableEntry> _rowTables = new List<TableEntry>();
         private bool _filling;
 
-        public ExportDialog(string documentName, IList<TableEntry> tables, CaptionPosition convention, bool allTables, bool includeCaption, bool convertNumbers)
+        /// <param name="detected">Position des légendes détectée dans le document (affichée pour le choix « Automatique »).</param>
+        /// <param name="captionPosition">Position choisie (None : automatique), avec laquelle les légendes de <paramref name="tables"/> ont été attribuées.</param>
+        /// <param name="deletedTables">Tableaux supprimés en suivi des modifications, écartés (signalés dans le résumé).</param>
+        /// <param name="includeSummary">Feuille « Sommaire » en tête du classeur (à partir de deux feuilles).</param>
+        public ExportDialog(string documentName, IList<TableEntry> tables, CaptionPosition detected, CaptionPosition captionPosition, bool allTables,
+            bool includeCaption, bool convertNumbers, bool includeSummary, int deletedTables = 0)
         {
             _tables = tables;
+            _deletedTables = deletedTables;
             int total = tables.Count;
-            int captioned = tables.Count(t => t.HasCaption);
 
             Text = "Exporter les tableaux vers Excel";
             Font = SystemFonts.MessageBoxFont;
@@ -77,31 +87,33 @@ namespace WordTableToExcel.UI
                 Margin = new Padding(0, 0, 0, 4)
             });
 
-            string summary = string.Format(CultureInfo.CurrentCulture, "{0} tableau{1} trouvé{2}, dont {3} avec une légende",
-                total, total > 1 ? "x" : string.Empty, total > 1 ? "s" : string.Empty, captioned);
-            if (captioned > 0)
-            {
-                summary += convention == CaptionPosition.Below ? " (légendes placées sous les tableaux)." : " (légendes placées au-dessus des tableaux).";
-            }
-            else
-            {
-                summary += ".";
-            }
-            root.Controls.Add(new Label { Text = summary, AutoSize = true, MaximumSize = new Size(width, 0), Margin = new Padding(0, 0, 0, 4) });
+            _summary = new Label { AutoSize = true, MaximumSize = new Size(width, 0), Margin = new Padding(0, 0, 0, 4) };
+            root.Controls.Add(_summary);
+
+            // --- Position des légendes : le choix « Automatique » affiche ce qui a été détecté, pour que l'utilisateur
+            // voie tout de suite si la détection se trompe et impose la bonne position.
+            var sideRow = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 4, 0, 0) };
+            sideRow.Controls.Add(new Label { Text = "Position des légendes :", AutoSize = true, Margin = new Padding(0, 6, 6, 0) });
+            _captionSide = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 340, Margin = new Padding(0, 2, 0, 0) };
+            _captionSide.Items.Add("Automatique \u2014 détectée : " + (detected == CaptionPosition.Below ? "au-dessous des tableaux" : "au-dessus des tableaux"));
+            _captionSide.Items.Add("Au-dessus des tableaux");
+            _captionSide.Items.Add("Au-dessous des tableaux");
+            _captionSide.SelectedIndex = captionPosition == CaptionPosition.Above ? 1 : captionPosition == CaptionPosition.Below ? 2 : 0;
+            _captionSide.Enabled = tables.Any(t => t.CaptionAbove != null || t.CaptionBelow != null);
+            sideRow.Controls.Add(_captionSide);
+            root.Controls.Add(sideRow);
+            root.Controls.Add(Hint("Si la position détectée n'est pas la bonne, choisissez-la : les légendes de la liste sont réattribuées aussitôt.", width));
 
             // --- Choix A / B
             root.Controls.Add(Section("Tableaux à exporter"));
             _captionedOnly = new RadioButton
             {
-                Text = string.Format(CultureInfo.CurrentCulture, "A \u2014 Uniquement les tableaux qui ont une légende ({0})", captioned),
                 AutoSize = true,
-                Enabled = captioned > 0,
                 Margin = new Padding(8, 2, 0, 0)
             };
             root.Controls.Add(_captionedOnly);
-            root.Controls.Add(Hint(captioned > 0
-                ? "Légende : champ SEQ « Tableau », « Table », « Tabla »… ou texte commençant par « Tabl… », juste au-dessus ou au-dessous du tableau. Chaque feuille porte le nom de sa légende."
-                : "Aucune légende de tableau n'a été détectée dans ce document.", width));
+            _captionedHint = Hint(string.Empty, width);
+            root.Controls.Add(_captionedHint);
 
             _allTables = new RadioButton
             {
@@ -136,6 +148,13 @@ namespace WordTableToExcel.UI
                 Checked = includeCaption,
                 Margin = new Padding(8, 2, 0, 0)
             };
+            _includeSummary = new CheckBox
+            {
+                Text = "Ajouter une feuille « Sommaire » en tête du classeur (liste des tableaux, avec un lien vers chaque feuille)",
+                AutoSize = true,
+                Checked = includeSummary,
+                Margin = new Padding(8, 4, 0, 0)
+            };
             _convertNumbers = new CheckBox
             {
                 Text = "Convertir les nombres en valeurs numériques Excel",
@@ -144,6 +163,7 @@ namespace WordTableToExcel.UI
                 Margin = new Padding(8, 4, 0, 0)
             };
             root.Controls.Add(_includeCaption);
+            root.Controls.Add(_includeSummary);
             root.Controls.Add(_convertNumbers);
             root.Controls.Add(Hint("Par exemple « 1 234,50 », « 12,5 % », « 45 € ». Sinon, le contenu des cellules est copié tel quel, sous forme de texte.", width));
 
@@ -176,12 +196,60 @@ namespace WordTableToExcel.UI
             AcceptButton = _exportButton;
             CancelButton = cancel;
 
-            if (captioned == 0 || allTables) _allTables.Checked = true;
+            RefreshCaptionTexts();
+            if (!_captionedOnly.Enabled || allTables) _allTables.Checked = true;
             else _captionedOnly.Checked = true;
 
             _captionedOnly.CheckedChanged += (s, e) => RefreshPreview();
             _allTables.CheckedChanged += (s, e) => RefreshPreview();
+            _captionSide.SelectedIndexChanged += (s, e) =>
+            {
+                ExportPlan.AssignCaptions(_tables, CaptionPositionChoice);
+                RefreshCaptionTexts();
+                RefreshPreview();
+            };
             RefreshPreview();
+        }
+
+        /// <summary>Position des légendes choisie (None : automatique).</summary>
+        public CaptionPosition CaptionPositionChoice
+        {
+            get
+            {
+                switch (_captionSide.SelectedIndex)
+                {
+                    case 1: return CaptionPosition.Above;
+                    case 2: return CaptionPosition.Below;
+                    default: return CaptionPosition.None;
+                }
+            }
+        }
+
+        /// <summary>Choix de la position des légendes (autotest).</summary>
+        internal void SetCaptionPosition(CaptionPosition position)
+        {
+            _captionSide.SelectedIndex = position == CaptionPosition.Above ? 1 : position == CaptionPosition.Below ? 2 : 0;
+        }
+
+        /// <summary>Textes qui dépendent du nombre de tableaux légendés (après une réattribution des légendes).</summary>
+        private void RefreshCaptionTexts()
+        {
+            int total = _tables.Count;
+            int captioned = _tables.Count(t => t.HasCaption);
+            string summary = string.Format(CultureInfo.CurrentCulture, "{0} tableau{1} trouvé{2}, dont {3} avec une légende.",
+                total, total > 1 ? "x" : string.Empty, total > 1 ? "s" : string.Empty, captioned);
+            if (_deletedTables > 0)
+            {
+                summary += string.Format(CultureInfo.CurrentCulture, " {0} tableau{1} supprimé{2} en suivi des modifications {3} ignoré{2}.",
+                    _deletedTables, _deletedTables > 1 ? "x" : string.Empty, _deletedTables > 1 ? "s" : string.Empty, _deletedTables > 1 ? "sont" : "est");
+            }
+            _summary.Text = summary;
+            _captionedOnly.Text = string.Format(CultureInfo.CurrentCulture, "A \u2014 Uniquement les tableaux qui ont une légende ({0})", captioned);
+            _captionedOnly.Enabled = captioned > 0;
+            _captionedHint.Text = captioned > 0
+                ? "Légende : champ SEQ « Tableau », « Table », « Tabla »… ou texte commençant par « Tabl… », juste au-dessus ou au-dessous du tableau. Chaque feuille porte le nom de sa légende."
+                : "Aucune légende de tableau n'a été détectée dans ce document.";
+            if (captioned == 0 && _captionedOnly.Checked) _allTables.Checked = true;
         }
 
         public bool AllTables
@@ -197,6 +265,11 @@ namespace WordTableToExcel.UI
         public bool ConvertNumbers
         {
             get { return _convertNumbers.Checked; }
+        }
+
+        public bool IncludeSummary
+        {
+            get { return _includeSummary.Checked; }
         }
 
         /// <summary>Rang des tableaux décochés par l'utilisateur.</summary>
