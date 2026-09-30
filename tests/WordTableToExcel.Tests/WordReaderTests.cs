@@ -321,6 +321,62 @@ namespace WordTableToExcel.Tests
             }
             Assert.False(b.Doc.Saved); // un document déjà modifié reste modifié
         }
+
+        [Fact]
+        public void CellByCell_SkipsTrackedDeletionsAndNoteReferences()
+        {
+            var b = new FakeDocumentBuilder();
+            var rows = new List<IList<FakeCellSpec>>
+            {
+                new List<FakeCellSpec> { Cell(1, "Prix"), Cell(2, "120150") },
+                new List<FakeCellSpec> { Cell(1, "Surface7"), Cell(2, "48") }
+            };
+            var table = b.Table(rows);
+            b.Revision("120").NoteReference("7").Revision("48", 1); // suppression non acceptée, renvoi, insertion
+
+            var model = new WordTableReader(b.Doc, null).Read(table, 1, null);
+
+            Assert.Equal("Prix", At(model, 0, 0).PlainText);
+            Assert.Equal("150", At(model, 0, 1).PlainText);
+            Assert.Equal("Surface", At(model, 1, 0).PlainText);
+            Assert.Equal("48", At(model, 1, 1).PlainText);
+        }
+
+        [Fact]
+        public void ContentFromXml_WordTextWithTrackedDeletions_StillUsesXml()
+        {
+            // Word renvoie le texte supprimé dans Range.Text (selon l'affichage) : le XML reste utilisé.
+            const string xml = @"<w:document xmlns:w=""http://schemas.openxmlformats.org/wordprocessingml/2006/main""><w:body><w:tbl>"
+                + @"<w:tblGrid><w:gridCol w:w=""2160""/><w:gridCol w:w=""2160""/></w:tblGrid><w:tr>"
+                + @"<w:tc><w:tcPr><w:tcW w:w=""2160"" w:type=""dxa""/></w:tcPr><w:p><w:r><w:t>Prix</w:t></w:r></w:p></w:tc>"
+                + @"<w:tc><w:tcPr><w:tcW w:w=""2160"" w:type=""dxa""/></w:tcPr><w:p><w:del w:id=""1"" w:author=""A""><w:r><w:delText>120</w:delText></w:r></w:del><w:r><w:t>150</w:t></w:r></w:p></w:tc>"
+                + @"</w:tr></w:tbl></w:body></w:document>";
+            var b = new FakeDocumentBuilder();
+            var table = b.Table(new List<IList<FakeCellSpec>> { new List<FakeCellSpec> { Cell(1, "Prix"), Cell(2, "120150") } }, xml);
+            b.Revision("120");
+
+            var model = new WordTableReader(b.Doc, null) { ReadContentFromXml = true }.Read(table, 1, null);
+
+            Assert.Equal(0, b.Doc.FontCalls);
+            Assert.Equal("Prix", At(model, 0, 0).PlainText);
+            Assert.Equal("150", At(model, 0, 1).PlainText);
+        }
+
+        [Fact]
+        public void TableEntirelyDeleted_IsDetected()
+        {
+            var b = new FakeDocumentBuilder();
+            var deleted = b.Table(new List<IList<FakeCellSpec>> { new List<FakeCellSpec> { Cell(1, "Ancien"), Cell(2, "tableau") } });
+            b.Paragraph("Texte", Plain);
+            var edited = b.Table(new List<IList<FakeCellSpec>> { new List<FakeCellSpec> { Cell(1, "Nouveau"), Cell(2, "tableau") } });
+            b.Paragraph("Texte", Plain);
+            var plain = b.Table(new List<IList<FakeCellSpec>> { new List<FakeCellSpec> { Cell(1, "Autre") } });
+            b.Revision("Ancien").Revision("tableau").Revision("Nouv");
+
+            Assert.True(WordRevisions.IsDeletedTable(deleted));
+            Assert.False(WordRevisions.IsDeletedTable(edited));
+            Assert.False(WordRevisions.IsDeletedTable(plain));
+        }
     }
 
     public class WordCaptionScannerTests
@@ -412,6 +468,19 @@ namespace WordTableToExcel.Tests
 
             var scanner = new WordCaptionScanner(b.Doc, new CaptionMatcher(), null);
             Assert.Equal("Tableaux comparatifs", scanner.Scan(t1, 1).Above.Text);
+        }
+
+        [Fact]
+        public void DeletedCaptionIsIgnored()
+        {
+            var b = new FakeDocumentBuilder();
+            b.Paragraph("Introduction", Plain);
+            b.Paragraph("Tableau 9 : Ancien titre", Plain);
+            var t1 = SmallTable(b, "a");
+            b.Revision("Tableau 9 : Ancien titre");
+
+            var scanner = new WordCaptionScanner(b.Doc, new CaptionMatcher(), null);
+            Assert.Null(scanner.Scan(t1, 1).Above);
         }
     }
 

@@ -26,6 +26,10 @@ EXPORTER LES TABLEAUX D'UN DOCUMENT WORD VERS EXCEL
      ceux à ne pas exporter (la case « Tout » les coche ou décoche tous).
   3. Choisissez où enregistrer le classeur : une feuille par tableau, avec
      sa mise en forme. Le document Word n'est jamais modifié.
+  Suivi des modifications : ce qui est supprimé (même si la suppression
+  n'est pas encore acceptée) n'est pas exporté, qu'il s'agisse de texte,
+  de lignes ou de tableaux entiers. Les renvois vers les notes de bas de
+  page ne sont pas exportés non plus (ils seraient pris pour des chiffres).
 
 IMPORTER DES TABLEAUX EXCEL DANS WORD
   1. Dans Word, cliquez à l'endroit où le tableau doit être inséré.

@@ -60,14 +60,23 @@ namespace WordTableToExcel.Core.Layout
         /// <summary>Hauteur de ligne Word en points (0 = automatique).</summary>
         public double[] RowHeightsPt;
         public bool[] RowHeightExact;
-        /// <summary>Nombre de cellules (y compris continuations de fusion verticale) de chaque ligne Word.</summary>
+        /// <summary>Nombre de cellules (y compris continuations de fusion verticale) de chaque ligne Word (lignes supprimées comprises).</summary>
         public int[] SourceCellCounts;
+        /// <summary>Nombre de lignes du tableau dans Word, lignes supprimées en suivi des modifications comprises.</summary>
+        public int SourceRowCount;
+        /// <summary>Rang (base 0) des lignes supprimées en suivi des modifications, absentes de la grille.</summary>
+        public readonly HashSet<int> DeletedRows = new HashSet<int>();
         /// <summary>true si fond et bordures proviennent de l'analyse XML (sinon ils restent à lire via COM).</summary>
         public bool HasCellFormatting;
         /// <summary>true si le texte et la mise en forme des caractères de chaque cellule ont été lus dans le XML.</summary>
         public bool HasContent;
         /// <summary>Texte visible du tableau selon le XML (pour vérification avec le texte renvoyé par Word).</summary>
         public string XmlText;
+        /// <summary>
+        /// Variantes acceptées du texte du tableau selon ce que Word inclut dans Range.Text : avec ou sans le texte
+        /// supprimé en suivi des modifications, avec ou sans le texte masqué.
+        /// </summary>
+        public readonly List<string> XmlTextVariants = new List<string>();
 
         /// <summary>Cellules visibles qui commencent sur la ligne Word donnée, dans l'ordre.</summary>
         public List<LayoutCell> CellsStartingOnSourceRow(int sourceRow)

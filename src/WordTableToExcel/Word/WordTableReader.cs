@@ -63,9 +63,11 @@ namespace WordTableToExcel.Word
             TableLayout layout = TryReadXmlLayout(t, model);
             bool xmlContent = ReadContentFromXml && layout != null && layout.HasContent && XmlTextMatchesWord(t, layout, documentIndex);
             Dictionary<LayoutCell, ComCell> pairs = null;
+            List<int[]> excluded = null;
 
             if (!xmlContent)
             {
+                excluded = ExcludedIntervals(t, documentIndex);
                 var comCells = EnumerateCells(t);
                 if (layout != null)
                 {
@@ -117,7 +119,7 @@ namespace WordTableToExcel.Word
                 {
                     try
                     {
-                        ReadCellContent(source, cell, layout.HasCellFormatting);
+                        ReadCellContent(source, cell, layout.HasCellFormatting, excluded);
                     }
                     catch (Exception ex)
                     {
@@ -222,9 +224,41 @@ namespace WordTableToExcel.Word
                 _log("Tableau " + documentIndex + " : texte indisponible (" + ex.Message + "), lecture cellule par cellule.");
                 return false;
             }
-            if (string.Equals(CellTextSanitizer.Comparable(wordText), CellTextSanitizer.Comparable(layout.XmlText), StringComparison.Ordinal)) return true;
-            _log("Tableau " + documentIndex + " : texte du XML différent de celui de Word (texte masqué, révisions…), lecture cellule par cellule.");
+            // Selon l'affichage, Word inclut ou non le texte supprimé en suivi des modifications et le texte masqué :
+            // chaque variante lue dans le XML est acceptée.
+            string word = CellTextSanitizer.Comparable(wordText);
+            foreach (var variant in layout.XmlTextVariants)
+            {
+                if (string.Equals(word, CellTextSanitizer.Comparable(variant), StringComparison.Ordinal)) return true;
+            }
+            _log("Tableau " + documentIndex + " : texte du XML différent de celui de Word, lecture cellule par cellule.");
             return false;
+        }
+
+        /// <summary>
+        /// Passages du tableau à ne pas exporter quand il est lu cellule par cellule : texte supprimé en suivi des
+        /// modifications (accepté ou non) et résultat des renvois vers une note (champs NOTEREF).
+        /// </summary>
+        private List<int[]> ExcludedIntervals(dynamic table, int documentIndex)
+        {
+            var intervals = new List<int[]>();
+            try
+            {
+                intervals.AddRange(WordRevisions.DeletedIntervals((object)table.Range));
+            }
+            catch (Exception ex)
+            {
+                _log("Tableau " + documentIndex + " : révisions illisibles (" + ex.Message + ").");
+            }
+            try
+            {
+                intervals.AddRange(WordRevisions.NoteReferenceIntervals((object)table.Range));
+            }
+            catch (Exception ex)
+            {
+                _log("Tableau " + documentIndex + " : champs illisibles (" + ex.Message + ").");
+            }
+            return WordRevisions.Normalize(intervals);
         }
 
         /// <summary>Police du thème du document (titres ou corps), si le XML du tableau ne contient pas le thème.</summary>
@@ -267,12 +301,15 @@ namespace WordTableToExcel.Word
         private Dictionary<LayoutCell, ComCell> Pair(TableLayout layout, List<ComCell> comCells, TableModel model)
         {
             var byRow = comCells.GroupBy(c => c.RowIndex).ToDictionary(g => g.Key, g => g.OrderBy(c => c.ColumnIndex).ToList());
-            if (byRow.Count > 0 && byRow.Keys.Max() > layout.RowCount) return null;
+            // Lignes de Word, y compris celles supprimées en suivi des modifications (absentes de la grille).
+            int sourceRows = Math.Max(layout.RowCount, layout.SourceRowCount);
+            if (byRow.Count > 0 && byRow.Keys.Max() > sourceRows) return null;
 
             var pairs = new Dictionary<LayoutCell, ComCell>();
             int mismatchedRows = 0;
-            for (int r = 0; r < layout.RowCount; r++)
+            for (int r = 0; r < sourceRows; r++)
             {
+                if (layout.DeletedRows.Contains(r)) continue; // ligne supprimée : non exportée
                 var visible = layout.CellsStartingOnSourceRow(r);
                 List<ComCell> row;
                 if (!byRow.TryGetValue(r + 1, out row)) row = new List<ComCell>();
@@ -329,13 +366,19 @@ namespace WordTableToExcel.Word
 
         // ------------------------------------------------------------------ contenu
 
-        private void ReadCellContent(ComCell source, CellModel cell, bool formattingFromXml)
+        /// <param name="excluded">Passages à ne pas exporter (suppressions suivies, renvois de notes).</param>
+        private void ReadCellContent(ComCell source, CellModel cell, bool formattingFromXml, List<int[]> excluded)
         {
             // La plage d'une cellule se termine par la marque de fin de cellule (1 position) : on l'exclut.
             int contentEnd = source.End - 1;
             if (contentEnd > source.Start)
             {
-                cell.Runs.AddRange(CellTextSanitizer.Clean(_runReader.Read(source.Start, contentEnd)));
+                var runs = new List<TextRun>();
+                foreach (var piece in WordRevisions.Subtract(source.Start, contentEnd, excluded))
+                {
+                    runs.AddRange(_runReader.Read(piece[0], piece[1]));
+                }
+                cell.Runs.AddRange(CellTextSanitizer.Clean(runs));
             }
 
             dynamic c = source.Cell;

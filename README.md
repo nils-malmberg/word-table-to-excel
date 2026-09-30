@@ -71,8 +71,9 @@ il ne faut pas le contourner, mais demander au service informatique.
   Sélectionnez-en un, puis **Exporter vers Excel…** : même choix A/B, mêmes options et même classeur qu'avec
   le complément. Un document ouvert est exporté tel qu'il est à l'écran (modifications non enregistrées
   comprises). Pour aller vite, l'application lit chaque tableau d'un bloc (le XML que Word fournit : texte,
-  styles, mise en forme) au lieu d'interroger Word caractère par caractère ; si ce texte diffère de celui
-  que Word affiche (texte masqué, suppressions suivies…), le tableau est relu cellule par cellule. Un fichier non ouvert est lu par une instance de Word **distincte et invisible**, en lecture seule,
+  styles, mise en forme) au lieu d'interroger Word caractère par caractère ; par sécurité, ce texte est comparé
+  à celui de Word et, s'il diffère, le tableau est relu cellule par cellule (avec les mêmes règles : suppressions
+  suivies et renvois de notes exclus). Un fichier non ouvert est lu par une instance de Word **distincte et invisible**, en lecture seule,
   macros désactivées, puis Word est refermé : vos documents ouverts ne sont pas touchés.
 - **Excel → Word.** Cliquez dans Word à l'endroit voulu, revenez dans l'application : l'encadré indique où les
   tableaux seront insérés (document, page, « juste après le paragraphe « … » », dans un tableau, dans un en-tête…).
@@ -200,6 +201,11 @@ tronquée à 31 caractères, sans les caractères interdits par Excel (`\ / ? * 
 | Gras, italique, souligné (simple/double), barré, exposant, indice | Identiques |
 | Majuscules (attribut « Majuscules ») | Texte converti en majuscules |
 | Texte masqué | Non exporté |
+| Texte **supprimé en suivi des modifications**, que la suppression soit acceptée ou non (y compris texte déplacé : son ancienne place) | Non exporté |
+| Ligne de tableau supprimée en suivi des modifications | Absente de la feuille |
+| Tableau entièrement supprimé en suivi des modifications | Ignoré : pas de feuille, pas de légende, absent de la liste ; une légende supprimée n'est plus une légende |
+| Texte inséré en suivi des modifications | Exporté (comme si l'insertion était acceptée) |
+| **Renvois vers une note** (champ `NOTEREF`, « voir note 3 ») et appels de note de bas de page ou de fin | Non exportés : ces chiffres seraient pris pour des valeurs (« 12,5³ » devenait 12,53) |
 | Trame (fond) de cellule, y compris motifs en pourcentage | Couleur de remplissage |
 | Mise en forme du **style de tableau** : ligne d'en-tête, dernière ligne, première/dernière colonne, lignes et colonnes à bandes | Fonds et bordures reproduits cellule par cellule |
 | Surlignage | Couleur de fond de la cellule (Excel ne peut pas surligner une partie de cellule) |

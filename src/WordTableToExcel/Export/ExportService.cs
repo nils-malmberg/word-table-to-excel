@@ -67,21 +67,29 @@ namespace WordTableToExcel.Export
                 var settings = Settings.Load();
                 CaptionPosition convention;
                 List<TableEntry> tables;
+                int deletedTables;
                 Cursor previousCursor = Cursor.Current;
                 try
                 {
                     Cursor.Current = Cursors.WaitCursor;
-                    tables = ScanTables(documentObject, tableCount, settings, out convention);
+                    tables = ScanTables(documentObject, tableCount, settings, out convention, out deletedTables);
                 }
                 finally
                 {
                     Cursor.Current = previousCursor;
                 }
+                if (tables.Count == 0)
+                {
+                    Messages.Info(owner, deletedTables > 0
+                        ? "Tous les tableaux de ce document sont supprimés en suivi des modifications : il n'y a rien à exporter."
+                        : "Ce document ne contient aucun tableau.");
+                    return;
+                }
 
                 string documentName = WordCom.AsString(document.Name);
                 bool allTables, includeCaption, convertNumbers;
                 ICollection<int> excluded;
-                using (var dialog = new ExportDialog(documentName, tables, convention, settings.AllTables, settings.IncludeCaptionRow, settings.ConvertNumbers))
+                using (var dialog = new ExportDialog(documentName, tables, convention, settings.AllTables, settings.IncludeCaptionRow, settings.ConvertNumbers, deletedTables))
                 {
                     if (dialog.ShowDialog(owner) != DialogResult.OK) return;
                     allTables = dialog.AllTables;
@@ -163,8 +171,10 @@ namespace WordTableToExcel.Export
 
         // ------------------------------------------------------------------ détection
 
-        private static List<TableEntry> ScanTables(object documentObject, int tableCount, Settings settings, out CaptionPosition convention)
+        /// <param name="deletedTables">Nombre de tableaux supprimés en suivi des modifications, écartés de la liste.</param>
+        private static List<TableEntry> ScanTables(object documentObject, int tableCount, Settings settings, out CaptionPosition convention, out int deletedTables)
         {
+            deletedTables = 0;
             dynamic document = documentObject;
             var labels = new List<string>(settings.ExtraLabels());
             try
@@ -184,10 +194,17 @@ namespace WordTableToExcel.Export
             foreach (dynamic table in document.Tables)
             {
                 index++;
+                if (IsDeletedTable((object)table, index))
+                {
+                    // Supprimé en suivi des modifications (accepté ou non) : ni exporté, ni candidat à une légende.
+                    deletedTables++;
+                    continue;
+                }
                 contexts.Add(scanner.Scan((object)table, index));
                 pages.Add(Pages(documentObject, (object)table));
             }
             if (index != tableCount) Log.Info("Nombre de tableaux : " + tableCount + " annoncés, " + index + " parcourus.");
+            if (deletedTables > 0) Log.Info(deletedTables + " tableau(x) supprimé(s) en suivi des modifications, ignoré(s).");
 
             var assignments = CaptionAssigner.Assign(contexts, out convention);
             var entries = new List<TableEntry>();
@@ -204,6 +221,19 @@ namespace WordTableToExcel.Export
             }
             Log.Info(string.Format("{0} tableau(x), {1} avec légende, convention : {2}.", entries.Count, entries.Count(e => e.HasCaption), convention));
             return entries;
+        }
+
+        private static bool IsDeletedTable(object tableObject, int index)
+        {
+            try
+            {
+                return WordRevisions.IsDeletedTable(tableObject);
+            }
+            catch (Exception ex)
+            {
+                Log.Info("Tableau " + index + " : révisions illisibles (" + ex.Message + ").");
+                return false;
+            }
         }
 
         /// <summary>Pages de début et de fin du tableau (0 si Word ne sait pas les donner, par exemple en mode Plan).</summary>
@@ -348,6 +378,13 @@ namespace WordTableToExcel.Export
                 {
                     Log.Error("Lecture du tableau " + item.Table.Index, ex);
                     report.Failures.Add(string.Format(CultureInfo.CurrentCulture, "Tableau {0} ({1}) non exporté : {2}", item.Table.Index, item.SheetName, ex.Message));
+                    continue;
+                }
+
+                if (model.RowCount == 0 || model.Cells.Count == 0)
+                {
+                    // Toutes les lignes sont supprimées en suivi des modifications.
+                    report.Warnings.Add(string.Format(CultureInfo.CurrentCulture, "Tableau {0} ({1}) non exporté : toutes ses lignes sont supprimées en suivi des modifications.", item.Table.Index, item.SheetName));
                     continue;
                 }
 

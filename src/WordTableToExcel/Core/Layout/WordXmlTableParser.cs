@@ -87,11 +87,27 @@ namespace WordTableToExcel.Core.Layout
                 }
             }
 
-            var rows = StructuralChildren(tbl, "tr").ToList();
+            // Lignes supprimées en suivi des modifications (même non acceptées) : absentes du tableau exporté.
+            // Leur rang d'origine est conservé (SourceRow) pour rester aligné sur les lignes de Word.
+            var allRows = StructuralChildren(tbl, "tr").ToList();
+            var rows = new List<XElement>();
+            var sourceRows = new List<int>();
+            for (int i = 0; i < allRows.Count; i++)
+            {
+                if (IsDeletedRow(allRows[i]))
+                {
+                    layout.DeletedRows.Add(i);
+                    continue;
+                }
+                rows.Add(allRows[i]);
+                sourceRows.Add(i);
+            }
+            layout.SourceRowCount = allRows.Count;
             layout.RowCount = rows.Count;
             layout.RowHeightsPt = new double[rows.Count];
             layout.RowHeightExact = new bool[rows.Count];
-            layout.SourceCellCounts = new int[rows.Count];
+            layout.SourceCellCounts = new int[allRows.Count];
+            foreach (int deleted in layout.DeletedRows) layout.SourceCellCounts[deleted] = StructuralChildren(allRows[deleted], "tc").Count();
 
             var rawRows = new List<List<RawCell>>();
             int headerRows = 0;
@@ -130,7 +146,7 @@ namespace WordTableToExcel.Core.Layout
                     {
                         Tc = tc,
                         TcPr = tcPr,
-                        SourceRow = r,
+                        SourceRow = sourceRows[r],
                         SourceIndex = index++,
                         SourceOrdinal = continuation ? -1 : ordinal,
                         GridColumn = column,
@@ -143,7 +159,7 @@ namespace WordTableToExcel.Core.Layout
                 }
                 column += Math.Max(0, OoxmlXml.IntAttr(OoxmlXml.Child(trPr, "gridAfter"), "val", 0));
                 maxColumns = Math.Max(maxColumns, column);
-                layout.SourceCellCounts[r] = index;
+                layout.SourceCellCounts[sourceRows[r]] = index;
                 rawRows.Add(rawRow);
             }
 
@@ -177,7 +193,7 @@ namespace WordTableToExcel.Core.Layout
                             Row = r,
                             Column = raw.GridColumn,
                             ColumnSpan = raw.GridSpan,
-                            SourceRow = r,
+                            SourceRow = raw.SourceRow,
                             SourceIndex = raw.SourceIndex,
                             SourceOrdinal = raw.SourceOrdinal,
                             SourceTag = raw.Tc
@@ -213,7 +229,8 @@ namespace WordTableToExcel.Core.Layout
                         RawCell raw;
                         cell.Content = tcPrByCell.TryGetValue(cell, out raw) ? content.ReadCell(raw.Tc, context.Formats(cell)) : new XmlCellContent();
                     }
-                    layout.XmlText = content.TableText(tbl);
+                    layout.XmlTextVariants.AddRange(content.TableTexts(tbl));
+                    layout.XmlText = layout.XmlTextVariants[0];
                     layout.HasContent = true;
                 }
             }
@@ -222,9 +239,16 @@ namespace WordTableToExcel.Core.Layout
                 // XML inattendu : le contenu sera lu par Word, cellule par cellule.
                 foreach (var cell in layout.Cells) cell.Content = null;
                 layout.XmlText = null;
+                layout.XmlTextVariants.Clear();
                 layout.HasContent = false;
             }
             return layout;
+        }
+
+        /// <summary>Ligne supprimée en suivi des modifications (w:trPr/w:del), acceptée ou non.</summary>
+        internal static bool IsDeletedRow(XElement tr)
+        {
+            return OoxmlXml.Child(tr, "trPr", "del") != null;
         }
 
         /// <summary>Enfants « structurels » (tr, tc) en traversant les contrôles de contenu et le XML personnalisé.</summary>

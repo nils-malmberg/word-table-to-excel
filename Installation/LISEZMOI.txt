@@ -17,7 +17,9 @@ UTILISER
     A - uniquement les tableaux qui ont une légende (« Tableau 1 : ... », champ SEQ) ;
     B - tous les tableaux (ceux sans légende deviennent Tableau_1, Tableau_2...).
   Puis choisissez où enregistrer le fichier Excel. Une feuille est créée par tableau,
-  avec sa mise en forme. Le document Word n'est jamais modifié.
+  avec sa mise en forme. Le document Word n'est jamais modifié. Ce qui est supprimé
+  en suivi des modifications (même non accepté : texte, lignes, tableaux entiers)
+  et les renvois vers les notes de bas de page ne sont pas exportés.
 
   Cliquez sur « Importer depuis Excel » pour faire l'inverse : placez le curseur
   dans le document, choisissez un classeur, cochez les feuilles voulues (un tableau

@@ -40,6 +40,7 @@ namespace WordTableToExcel.Tests.Fakes
         public readonly List<FakeChar> Chars = new List<FakeChar>();
         public readonly List<FakeTable> TableList = new List<FakeTable>();
         public readonly List<FakeField> FieldList = new List<FakeField>();
+        public readonly List<FakeRevision> RevisionList = new List<FakeRevision>();
         public int RangeCalls;
         public int FontCalls;
         public bool Saved = true;
@@ -174,6 +175,11 @@ namespace WordTableToExcel.Tests.Fakes
 
         public FakeFields Fields => new FakeFields(_doc.FieldList.Where(f => f.Position >= Start && f.Position < End).ToList());
 
+        /// <summary>Révisions qui touchent la plage (comme Word, chacune avec sa plage complète).</summary>
+        public FakeRevisions Revisions => new FakeRevisions(_doc.RevisionList.Where(r => r.Start < End && r.End > Start).ToList());
+
+        public FakeDocument Document => _doc;
+
         /// <summary>Cellules d'un tableau (Range.Cells) : toutes les cellules visibles, imbriquées comprises.</summary>
         public FakeCells Cells
         {
@@ -284,10 +290,35 @@ namespace WordTableToExcel.Tests.Fakes
 
     public sealed class FakeField
     {
+        public FakeDocument Doc;
         public int Position;
         public int Type = 12;
         public string CodeText;
+        public int ResultStart, ResultEnd;
         public FakeNamedText Code => new FakeNamedText { Text = CodeText };
+        public FakeRange Result => new FakeRange(Doc, ResultStart, ResultEnd);
+    }
+
+    /// <summary>Révision du suivi des modifications (wdRevisionInsert = 1, wdRevisionDelete = 2…).</summary>
+    public sealed class FakeRevision
+    {
+        public FakeDocument Doc;
+        public int Type;
+        public int Start, End;
+        public FakeRange Range => new FakeRange(Doc, Start, End);
+    }
+
+    public sealed class FakeRevisions : IEnumerable
+    {
+        private readonly List<FakeRevision> _items;
+
+        public FakeRevisions(List<FakeRevision> items)
+        {
+            _items = items;
+        }
+
+        public int Count => _items.Count;
+        public IEnumerator GetEnumerator() => _items.GetEnumerator();
     }
 
     public sealed class FakeNamedText
@@ -404,6 +435,30 @@ namespace WordTableToExcel.Tests.Fakes
         public FakeDocumentBuilder Text(string text, CharFormat format = null)
         {
             foreach (char c in text) Doc.Chars.Add(new FakeChar { C = c, F = (format ?? Normal).Clone() });
+            return this;
+        }
+
+        /// <summary>Position du premier caractère de <paramref name="text"/> dans le document.</summary>
+        public int PositionOf(string text)
+        {
+            int index = new string(Doc.Chars.Select(c => c.C).ToArray()).IndexOf(text, StringComparison.Ordinal);
+            if (index < 0) throw new ArgumentException("Texte absent du document : " + text);
+            return index;
+        }
+
+        /// <summary>Marque <paramref name="text"/> comme révision (supprimé en suivi des modifications par défaut).</summary>
+        public FakeDocumentBuilder Revision(string text, int type = 2)
+        {
+            int start = PositionOf(text);
+            Doc.RevisionList.Add(new FakeRevision { Doc = Doc, Type = type, Start = start, End = start + text.Length });
+            return this;
+        }
+
+        /// <summary>Marque <paramref name="text"/> comme résultat d'un renvoi vers une note (champ NOTEREF).</summary>
+        public FakeDocumentBuilder NoteReference(string text)
+        {
+            int start = PositionOf(text);
+            Doc.FieldList.Add(new FakeField { Doc = Doc, Position = start, Type = 72, CodeText = " NOTEREF _Ref1 \\h ", ResultStart = start, ResultEnd = start + text.Length });
             return this;
         }
 

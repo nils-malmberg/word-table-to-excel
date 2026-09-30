@@ -38,7 +38,9 @@ namespace WordTableToExcel.UI
         private readonly List<TableEntry> _rowTables = new List<TableEntry>();
         private bool _filling;
 
-        public ExportDialog(string documentName, IList<TableEntry> tables, CaptionPosition convention, bool allTables, bool includeCaption, bool convertNumbers)
+        /// <param name="deletedTables">Tableaux supprimés en suivi des modifications, écartés (signalés dans le résumé).</param>
+        public ExportDialog(string documentName, IList<TableEntry> tables, CaptionPosition convention, bool allTables, bool includeCaption, bool convertNumbers,
+            int deletedTables = 0)
         {
             _tables = tables;
             int total = tables.Count;
@@ -86,6 +88,11 @@ namespace WordTableToExcel.UI
             else
             {
                 summary += ".";
+            }
+            if (deletedTables > 0)
+            {
+                summary += string.Format(CultureInfo.CurrentCulture, " {0} tableau{1} supprimé{2} en suivi des modifications {3} ignoré{2}.",
+                    deletedTables, deletedTables > 1 ? "x" : string.Empty, deletedTables > 1 ? "s" : string.Empty, deletedTables > 1 ? "sont" : "est");
             }
             root.Controls.Add(new Label { Text = summary, AutoSize = true, MaximumSize = new Size(width, 0), Margin = new Padding(0, 0, 0, 4) });
 

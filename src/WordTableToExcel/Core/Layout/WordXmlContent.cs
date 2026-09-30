@@ -46,6 +46,7 @@ namespace WordTableToExcel.Core.Layout
         private readonly Dictionary<XElement, RunProps> _styleRunProps = new Dictionary<XElement, RunProps>();
         private readonly Dictionary<string, List<XElement>> _paragraphChains = new Dictionary<string, List<XElement>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<RunProps>> _characterChains = new Dictionary<string, List<RunProps>>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _noteReferenceStyles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Lecteur pour le document XML <paramref name="root"/> (paquet « Flat OPC » de Word ou document seul) ;
@@ -81,6 +82,21 @@ namespace WordTableToExcel.Core.Layout
                     else if (string.Equals(type, "character", StringComparison.OrdinalIgnoreCase))
                     {
                         if (!_characterStyles.ContainsKey(id)) _characterStyles[id] = style;
+                    }
+                }
+                // Styles d'appel de note (noms anglais normalisés dans le XML, quelle que soit la langue de Word),
+                // et styles qui en dérivent.
+                foreach (var entry in _characterStyles)
+                {
+                    foreach (var ancestor in Chain(entry.Value, _characterStyles))
+                    {
+                        string styleName = (OoxmlXml.Attr(OoxmlXml.Child(ancestor, "name"), "val") ?? string.Empty).Trim();
+                        if (string.Equals(styleName, "footnote reference", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(styleName, "endnote reference", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _noteReferenceStyles.Add(entry.Key);
+                            break;
+                        }
                     }
                 }
                 var docDefaults = OoxmlXml.Child(styles, "docDefaults");
@@ -151,12 +167,25 @@ namespace WordTableToExcel.Core.Layout
             return content;
         }
 
-        /// <summary>Texte visible du tableau entier, dans l'ordre du document (pour vérification avec le texte de Word).</summary>
-        public string TableText(XElement tbl)
+        /// <summary>
+        /// Texte du tableau entier, dans l'ordre du document, pour vérification avec le texte que renvoie Word :
+        /// variantes avec et sans le texte supprimé en suivi des modifications et le texte masqué (Word les inclut
+        /// ou non selon l'affichage). Les renvois de notes y figurent, comme dans le texte de Word.
+        /// </summary>
+        public List<string> TableTexts(XElement tbl)
         {
             var state = new WalkState(this, new XElement[0], false);
             NestedTable(tbl, state);
-            return state.Raw.ToString();
+            return state.RawVariants();
+        }
+
+        /// <summary>Champ en cours de lecture (complexe : fldChar begin / separate / end).</summary>
+        private sealed class FieldState
+        {
+            public bool InCode = true;
+            public readonly StringBuilder Instruction = new StringBuilder();
+            /// <summary>Résultat à ne pas exporter (renvoi vers une note : champ NOTEREF).</summary>
+            public bool HideResult;
         }
 
         private sealed class WalkState
@@ -165,11 +194,19 @@ namespace WordTableToExcel.Core.Layout
             public IList<XElement> TableFormats;
             public readonly bool CollectRuns;
             public readonly List<TextRun> Runs = new List<TextRun>();
-            public readonly StringBuilder Raw = new StringBuilder();
             public readonly List<int> Alignments = new List<int>();
-            /// <summary>Pile des champs ouverts : vrai tant qu'on est dans le code du champ.</summary>
-            public readonly List<bool> Fields = new List<bool>();
+            public readonly List<FieldState> Fields = new List<FieldState>();
             public ParagraphContext Paragraph;
+            /// <summary>Contenu supprimé en suivi des modifications (w:del, w:moveFrom, ligne supprimée).</summary>
+            public bool Deleted;
+            /// <summary>Profondeur dans des champs simples dont le résultat n'est pas exporté (w:fldSimple NOTEREF).</summary>
+            public int HiddenSimpleFields;
+
+            // Texte brut pour la vérification : tout / sans suppressions / sans texte masqué / ni l'un ni l'autre.
+            private readonly StringBuilder _all = new StringBuilder();
+            private readonly StringBuilder _noDeleted = new StringBuilder();
+            private readonly StringBuilder _noHidden = new StringBuilder();
+            private readonly StringBuilder _visible = new StringBuilder();
 
             public WalkState(WordXmlContentReader reader, IList<XElement> tableFormats, bool collectRuns)
             {
@@ -184,10 +221,44 @@ namespace WordTableToExcel.Core.Layout
                 {
                     for (int i = 0; i < Fields.Count; i++)
                     {
-                        if (Fields[i]) return true;
+                        if (Fields[i].InCode) return true;
                     }
                     return false;
                 }
+            }
+
+            /// <summary>Dans le résultat d'un renvoi vers une note (non exporté).</summary>
+            public bool InHiddenFieldResult
+            {
+                get
+                {
+                    if (HiddenSimpleFields > 0) return true;
+                    for (int i = 0; i < Fields.Count; i++)
+                    {
+                        if (!Fields[i].InCode && Fields[i].HideResult) return true;
+                    }
+                    return false;
+                }
+            }
+
+            public void AppendRaw(string text, bool deleted, bool hidden)
+            {
+                _all.Append(text);
+                if (!deleted) _noDeleted.Append(text);
+                if (!hidden) _noHidden.Append(text);
+                if (!deleted && !hidden) _visible.Append(text);
+            }
+
+            /// <summary>Variantes distinctes, la version visible (sans suppression ni texte masqué) en premier.</summary>
+            public List<string> RawVariants()
+            {
+                var list = new List<string>();
+                foreach (var sb in new[] { _visible, _noHidden, _noDeleted, _all })
+                {
+                    string text = sb.ToString();
+                    if (!list.Contains(text)) list.Add(text);
+                }
+                return list;
             }
 
             public void Add(string text, RunFormat format, Rgb? highlight)
@@ -199,11 +270,15 @@ namespace WordTableToExcel.Core.Layout
                 else Runs.Add(run);
             }
 
-            /// <summary>Fin de paragraphe : « \r », avec la mise en forme du texte qui précède.</summary>
-            public void EndParagraph()
+            /// <summary>
+            /// Fin de paragraphe : « \r », avec la mise en forme du texte qui précède. Une marque de paragraphe
+            /// supprimée joint le paragraphe au suivant (pas de saut de ligne).
+            /// </summary>
+            public void EndParagraph(bool markDeleted)
             {
-                Raw.Append('\r');
-                if (!CollectRuns) return;
+                bool deleted = Deleted || markDeleted;
+                AppendRaw("\r", deleted, false);
+                if (!CollectRuns || deleted) return;
                 if (Runs.Count > 0) Runs[Runs.Count - 1].Text += "\r";
                 else Runs.Add(new TextRun("\r", Reader.Resolve(Paragraph, null).Format, null));
             }
@@ -231,7 +306,25 @@ namespace WordTableToExcel.Core.Layout
                 {
                     Block(child, state);
                 }
-                // tcPr, signets, suppressions (del, moveFrom)… : rien d'affiché.
+                else if (OoxmlXml.Is(child, "del") || OoxmlXml.Is(child, "moveFrom"))
+                {
+                    WithDeleted(state, () => Block(child, state));
+                }
+                // tcPr, signets… : rien d'affiché.
+            }
+        }
+
+        private static void WithDeleted(WalkState state, Action action)
+        {
+            bool saved = state.Deleted;
+            state.Deleted = true;
+            try
+            {
+                action();
+            }
+            finally
+            {
+                state.Deleted = saved;
             }
         }
 
@@ -239,8 +332,14 @@ namespace WordTableToExcel.Core.Layout
         {
             foreach (var tr in WordXmlTableParser.StructuralChildren(tbl, "tr"))
             {
-                foreach (var tc in WordXmlTableParser.StructuralChildren(tr, "tc")) Block(tc, state);
-                state.EndParagraph(); // marque de fin de ligne
+                Action row = () =>
+                {
+                    foreach (var tc in WordXmlTableParser.StructuralChildren(tr, "tc")) Block(tc, state);
+                    state.EndParagraph(false); // marque de fin de ligne
+                };
+                // Ligne supprimée en suivi des modifications : rien d'exporté.
+                if (WordXmlTableParser.IsDeletedRow(tr)) WithDeleted(state, row);
+                else row();
             }
         }
 
@@ -253,9 +352,10 @@ namespace WordTableToExcel.Core.Layout
                 Styles = chain.Select(StyleRunProps).ToList(),
                 Table = state.TableFormats.Select(f => StyleRunProps(f)).ToList()
             };
-            if (state.CollectRuns) state.Alignments.Add(Alignment(pPr, chain, state.TableFormats));
+            if (state.CollectRuns && !state.Deleted) state.Alignments.Add(Alignment(pPr, chain, state.TableFormats));
             Inline(p, state);
-            state.EndParagraph();
+            bool markDeleted = OoxmlXml.Child(pPr, "rPr", "del") != null || OoxmlXml.Child(pPr, "rPr", "moveFrom") != null;
+            state.EndParagraph(markDeleted);
         }
 
         private void Inline(XElement parent, WalkState state)
@@ -266,11 +366,29 @@ namespace WordTableToExcel.Core.Layout
                 {
                     Run(child, state);
                 }
+                else if (OoxmlXml.Is(child, "fldSimple"))
+                {
+                    // Champ simple : un renvoi vers une note (NOTEREF) n'est pas exporté.
+                    bool hide = IsNoteReferenceField(OoxmlXml.Attr(child, "instr"));
+                    if (hide) state.HiddenSimpleFields++;
+                    try
+                    {
+                        Inline(child, state);
+                    }
+                    finally
+                    {
+                        if (hide) state.HiddenSimpleFields--;
+                    }
+                }
                 else if (OoxmlXml.Is(child, "hyperlink") || OoxmlXml.Is(child, "smartTag") || OoxmlXml.Is(child, "customXml")
-                    || OoxmlXml.Is(child, "ins") || OoxmlXml.Is(child, "moveTo") || OoxmlXml.Is(child, "fldSimple")
-                    || OoxmlXml.Is(child, "bdo") || OoxmlXml.Is(child, "dir"))
+                    || OoxmlXml.Is(child, "ins") || OoxmlXml.Is(child, "moveTo") || OoxmlXml.Is(child, "bdo") || OoxmlXml.Is(child, "dir"))
                 {
                     Inline(child, state);
+                }
+                else if (OoxmlXml.Is(child, "del") || OoxmlXml.Is(child, "moveFrom"))
+                {
+                    // Suppression en suivi des modifications, acceptée ou non : jamais exportée.
+                    WithDeleted(state, () => Inline(child, state));
                 }
                 else if (OoxmlXml.Is(child, "sdt"))
                 {
@@ -282,12 +400,19 @@ namespace WordTableToExcel.Core.Layout
                     if (state.InFieldCode) continue;
                     // Équation : son texte linéaire, avec la mise en forme du paragraphe.
                     string text = string.Concat(child.Descendants().Where(e => OoxmlXml.Is(e, "t")).Select(e => e.Value).ToArray());
-                    state.Raw.Append(text);
+                    state.AppendRaw(text, state.Deleted, false);
+                    if (state.Deleted || state.InHiddenFieldResult) continue;
                     var effective = Resolve(state.Paragraph, null);
                     state.Add(text, effective.Format, effective.Highlight);
                 }
-                // del, moveFrom (supprimés), pPr, signets, commentaires, AlternateContent (dessins)… : ignorés.
+                // pPr, signets, commentaires, AlternateContent (dessins)… : ignorés.
             }
+        }
+
+        /// <summary>Champ « renvoi » vers une note de bas de page ou de fin (NOTEREF).</summary>
+        private static bool IsNoteReferenceField(string instruction)
+        {
+            return instruction != null && instruction.TrimStart().StartsWith("NOTEREF", StringComparison.OrdinalIgnoreCase);
         }
 
         private void Run(XElement r, WalkState state)
@@ -301,9 +426,25 @@ namespace WordTableToExcel.Core.Layout
                 if (OoxmlXml.Is(child, "fldChar"))
                 {
                     string type = (OoxmlXml.Attr(child, "fldCharType") ?? string.Empty).ToLowerInvariant();
-                    if (type == "begin") state.Fields.Add(true);
-                    else if (type == "separate" && state.Fields.Count > 0) state.Fields[state.Fields.Count - 1] = false;
-                    else if (type == "end" && state.Fields.Count > 0) state.Fields.RemoveAt(state.Fields.Count - 1);
+                    var top = state.Fields.Count > 0 ? state.Fields[state.Fields.Count - 1] : null;
+                    if (type == "begin")
+                    {
+                        state.Fields.Add(new FieldState());
+                    }
+                    else if (type == "separate" && top != null)
+                    {
+                        top.InCode = false;
+                        top.HideResult = IsNoteReferenceField(top.Instruction.ToString());
+                    }
+                    else if (type == "end" && top != null)
+                    {
+                        state.Fields.RemoveAt(state.Fields.Count - 1);
+                    }
+                    continue;
+                }
+                if (OoxmlXml.Is(child, "instrText") || OoxmlXml.Is(child, "delInstrText"))
+                {
+                    if (state.Fields.Count > 0 && state.Fields[state.Fields.Count - 1].InCode) state.Fields[state.Fields.Count - 1].Instruction.Append(child.Value);
                     continue;
                 }
                 if (state.InFieldCode) continue;
@@ -316,6 +457,9 @@ namespace WordTableToExcel.Core.Layout
                 {
                     case "t":
                         text = child.Value;
+                        break;
+                    case "delText":
+                        if (state.Deleted) text = child.Value;
                         break;
                     case "tab":
                     case "ptab":
@@ -342,6 +486,7 @@ namespace WordTableToExcel.Core.Layout
                         rawText = "("; // Word renvoie « ( » pour un symbole dans le texte d'une plage
                         break;
                 }
+                // Appels de note (footnoteReference, endnoteReference) : pas de texte, rien d'exporté.
                 if (string.IsNullOrEmpty(text)) continue;
 
                 if (!directParsed)
@@ -350,10 +495,12 @@ namespace WordTableToExcel.Core.Layout
                     directParsed = true;
                 }
                 if (effective == null) effective = Resolve(state.Paragraph, direct);
-                if (effective.Hidden) continue;
 
-                state.Raw.Append(rawText ?? text);
-                if (!state.CollectRuns) continue;
+                state.AppendRaw(rawText ?? text, state.Deleted, effective.Hidden);
+                if (!state.CollectRuns || state.Deleted || effective.Hidden) continue;
+                // Renvois vers une note (champ NOTEREF, ou texte au style « Appel de note ») : non exportés.
+                if (state.InHiddenFieldResult || IsNoteReferenceStyle(direct)) continue;
+
                 string shown = effective.AllCaps ? text.ToUpper(CultureInfo.CurrentCulture) : text;
                 RunFormat format = effective.Format;
                 if (!string.IsNullOrEmpty(symbolFont))
@@ -363,6 +510,12 @@ namespace WordTableToExcel.Core.Layout
                 }
                 state.Add(shown, format, effective.Highlight);
             }
+        }
+
+        /// <summary>Segment au style de caractère « Appel de note de bas de page » ou « Appel de note de fin ».</summary>
+        private bool IsNoteReferenceStyle(RunProps direct)
+        {
+            return direct != null && !string.IsNullOrEmpty(direct.StyleId) && _noteReferenceStyles.Contains(direct.StyleId);
         }
 
         /// <summary>Caractère d'un symbole (w:sym) : les polices de symboles utilisent la zone F000-F0FF.</summary>

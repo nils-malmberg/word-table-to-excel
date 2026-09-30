@@ -78,7 +78,8 @@ namespace WordTableToExcel.Word
                 dynamic range = paragraph.Range;
                 if (WordCom.AsInt(range.Tables.Count) > 0) return null; // on est arrivé dans un autre tableau
 
-                string text = WordCom.AsString(range.Text);
+                // Texte sans les passages supprimés en suivi des modifications : une légende supprimée n'en est plus une.
+                string text = WordRevisions.VisibleText((object)range);
                 string clean = CaptionMatcher.CleanCaptionText(text);
                 if (clean.Length == 0)
                 {
