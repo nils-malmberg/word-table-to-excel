@@ -5,7 +5,7 @@ arborescence, architecture, déroulement détaillé de l'export et de l'import, 
 complément Word (gelé), réglages, compilation, tests, intégration continue, publication, conventions et
 pièges connus de Word. Le mode d'emploi utilisateur est dans le [README](README.md).
 
-Version en cours : **2.1.0** (non publiée : pas encore de tag).
+Version actuelle : **2.1.0** (numéro dans `src/Version.cs`).
 
 ---
 
@@ -61,7 +61,7 @@ Principes non négociables, vérifiés par les tests et la relecture :
 ├── README.md                     Mode d'emploi utilisateur (court)
 ├── DEVELOPPEMENT.md              Ce document
 ├── WordTableToExcel.sln          Solution : complément, application, tests
-├── build.cmd                     Windows : tests + recompilation de la DLL et de l'exe (copiés dans Installation/ et Application/)
+├── build.cmd                     Windows, SANS SDK : compile la DLL et l'exe avec le compilateur C# de Windows, autotest, copie dans Installation/ et Application/
 ├── Application/                  LIVRÉ — application prête à l'emploi
 │   ├── TableauxWordExcel.exe     Exécutable unique (.NET Framework 4, AnyCPU) — à recompiler et recopier après chaque modification
 │   └── LISEZMOI.txt              Mode d'emploi court
@@ -73,11 +73,13 @@ Principes non négociables, vérifiés par les tests et la relecture :
 │   ├── INFORMATIQUE.txt          Note au service informatique (signature Authenticode des DLL)
 │   └── signer-les-dll.ps1        Script de signature (service informatique)
 ├── build/
+│   ├── sortie/                   (généré par build.cmd, ignoré par Git)
 │   ├── build-installation.sh     Linux/WSL : tests, DLL, exe, chargeurs natifs
 │   ├── build-shim.sh             Compile shim.c en 32 et 64 bits (MinGW-w64)
 │   └── make-icon.py              Génère TableauxWordExcel.ico (Pillow)
 ├── src/
-│   ├── WordTableToExcel/         Bibliothèque partagée + complément (net40, signée : WordTableToExcel.snk)
+│   ├── Version.cs                Numéro de version (seul endroit) et plate-forme visée, compilé dans la DLL et l'exe
+│   ├── WordTableToExcel/         Bibliothèque partagée + complément (net40, C# 5, signée : WordTableToExcel.snk)
 │   │   ├── AddIn/                Complément uniquement (non compilé dans l'application)
 │   │   │   ├── Connect.cs            Point d'entrée COM (IDTExtensibility2, IRibbonExtensibility), clics du ruban
 │   │   │   ├── Ribbon.xml            Boutons « Tableaux vers Excel » / « Importer depuis Excel » (Accueil et Références)
@@ -143,10 +145,11 @@ Principes non négociables, vérifiés par les tests et la relecture :
 │   │   ├── Infrastructure/
 │   │   │   ├── Log.cs                Journal %LOCALAPPDATA%\WordTableToExcel\WordTableToExcel.log (1 Mo, 1 archive)
 │   │   │   └── Settings.cs           Préférences HKCU\Software\WordTableToExcel
-│   │   └── Properties/AssemblyInfo.cs
+│   │   └── Properties/AssemblyInfo.cs   Titre, produit, ComVisible, Guid du complément
 │   ├── TableauxWordExcel/        Application autonome (WinExe net40, AnyCPU, compile aussi Core/Word/Export/Import/UI/Infrastructure)
 │   │   ├── Program.cs            Instance unique, nettoyage d'un Word invisible orphelin, filtre OLE, --selftest
-│   │   ├── app.manifest          asInvoker (jamais d'élévation), version
+│   │   ├── Properties/AssemblyInfo.cs   Titre et produit de l'application
+│   │   ├── app.manifest          asInvoker (jamais d'élévation), mise à l'échelle GDI
 │   │   ├── TableauxWordExcel.ico
 │   │   └── App/
 │   │       ├── MainForm.cs           Fenêtre principale : documents, export, point d'insertion, import
@@ -447,6 +450,45 @@ poste.
 
 ## 9. Compilation
 
+Deux façons de compiler, qui produisent les mêmes fichiers à partir des mêmes sources :
+
+| | Au bureau, sans SDK : `build.cmd` | Avec le SDK .NET |
+|---|---|---|
+| Outils | Compilateur C# **fourni avec Windows** (.NET Framework 4.5 ou plus récent installé, c'est-à-dire tout Windows 8, 10 ou 11 à jour) | SDK .NET 8 (Windows, Linux, macOS) |
+| Installation, internet, droits administrateur | Aucun | Installation du SDK |
+| Produit | `Installation\WordTableToExcel.dll`, `Application\TableauxWordExcel.exe` | idem, plus les tests |
+| Vérification | Autotest de l'application (sans Word) | 349 tests + autotest (CI) |
+
+### 9.1 Au bureau, sans SDK : `build.cmd`
+
+Double-cliquer sur `build.cmd` (ou le lancer dans une invite de commandes). Le script :
+
+1. trouve `csc.exe` dans `C:\Windows\Microsoft.NET\Framework64\v4.0.30319` (ou `Framework`) ;
+2. compile la DLL du complément (C# 5, sources en UTF-8, bibliothèques du .NET Framework, nom fort avec
+   `WordTableToExcel.snk`, ressource `Ribbon.xml`) puis l'exe (icône, manifeste, ressource icône) dans
+   `build\sortie\` ;
+3. lance l'autotest de l'exe compilé (`--selftest`, sans Word : fenêtres, filtre OLE, lecture du classeur de test) ;
+4. seulement si tout a réussi, copie la DLL dans `Installation\` et l'exe dans `Application\`. En cas d'erreur,
+   rien n'est remplacé.
+
+Avant la première utilisation, vérifier que le compilateur n'est pas bloqué par une règle de l'entreprise :
+`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /?` doit afficher l'aide. S'il est bloqué, ne pas
+contourner le blocage : demander au service informatique, ou compiler ailleurs.
+
+Limites de cette voie, à connaître quand on modifie le code au bureau :
+
+- **Syntaxe C# 5 seulement** (2012) : pas d'interpolation `$"…"`, d'opérateur `?.`, de `nameof`, de propriétés
+  initialisées (`{ get; set; } = …`), de membres `=>`, de `out var`, de tuples, de filtres `catch … when`…
+  Les projets imposent `LangVersion 5` : le SDK refuse ces syntaxes dès la compilation.
+- Le compilateur de Windows compile avec les bibliothèques **installées** (.NET Framework 4.8 en général), alors
+  que l'application cible .NET Framework 4.0 : une fonction apparue après la 4.0 (par exemple `Task.Run` ou
+  `IReadOnlyList`, apparus en 4.5) serait acceptée par `build.cmd` mais refusée par la compilation avec le SDK
+  (bibliothèques de référence 4.0), qui reste le garde-fou.
+- Les tests automatiques (xunit, .NET 8) et les chargeurs natifs du complément (C, MinGW-w64) ne sont pas
+  concernés : les premiers demandent le SDK, les seconds ne changent pas (complément gelé).
+
+### 9.2 Avec le SDK .NET
+
 Prérequis : [SDK .NET 8](https://dotnet.microsoft.com/download) (les projets ciblent .NET Framework 4.0 grâce
 aux assemblies de référence NuGet, compilables sous Linux) ; MinGW-w64 pour le chargeur natif.
 
@@ -459,9 +501,12 @@ build/build-installation.sh                       # tout, et recopie dans Instal
 python3 build/make-icon.py                        # icône
 ```
 
-Sous Windows, `build.cmd` exécute les tests et recopie la DLL et l'exe. **Les binaires livrés sont suivis par
-Git** (`Application/TableauxWordExcel.exe`, `Installation/*.dll`) : après toute modification du code, les
-recompiler et les recopier dans le même commit (la CI vérifie aussi l'exe du dépôt).
+Version et attributs d'assemblage ne viennent pas des `.csproj` (`GenerateAssemblyInfo=false`) mais de
+`src/Version.cs` et des `Properties/AssemblyInfo.cs`, compilés aussi par `build.cmd` : les deux voies donnent des
+fichiers identiques (version, titre, produit, plate-forme visée).
+
+**Les binaires livrés sont suivis par Git** (`Application/TableauxWordExcel.exe`, `Installation/*.dll`) : après
+toute modification du code, les recompiler (l'une ou l'autre voie) et les déposer dans le même commit.
 
 ## 10. Tests
 
@@ -510,7 +555,9 @@ exports de suite), import d'un classeur exporté.
    en 32 et 64 bits depuis un compte standard, `uninstall.cmd` — `com-smoke-test.ps1`) ; signature et
    stratégies de Word (`enterprise-check.ps1`) ; compilation de l'exe ; autotest de l'exe compilé **et** de
    celui du dépôt (`app-selftest.ps1` : fichier unique, manifeste, icône, `--selftest`, démarrage réel, instance
-   unique) ; installation depuis un dossier reconstruit à partir des sources.
+   unique) ; installation depuis un dossier reconstruit à partir des sources ; enfin **`build.cmd`** avec le
+   compilateur de Windows, puis les mêmes vérifications sur ce qu'il produit (import sur .NET Framework,
+   installation et activation du complément, autotest et démarrage de l'application).
 3. Les captures de l'autotest sont publiées comme artefacts et imprimées dans le journal (lignes `PNG64`).
 
 **`release.yml`** : déclenché par un tag `v*` (ou manuellement avec un tag) ; refait les vérifications puis crée
@@ -519,19 +566,34 @@ la release GitHub avec `TableauxWordExcel.exe` et `WordTableToExcel-<tag>.zip`, 
 
 **Publier une version** :
 
-1. Numéro de version dans `src/WordTableToExcel/WordTableToExcel.csproj`,
-   `src/TableauxWordExcel/TableauxWordExcel.csproj` (`Version`, `AssemblyVersion`, `FileVersion`) et
-   `src/TableauxWordExcel/app.manifest` ;
+1. numéro de version dans **`src/Version.cs`** (seul endroit) ;
 2. notes dans `.github/release-notes/vX.Y.Z.md` ;
-3. binaires recompilés et recopiés ; recette manuelle ; CI verte ;
+3. binaires recompilés et déposés ; recette manuelle ; CI verte ;
 4. fusion dans `main`, puis tag `vX.Y.Z` (déclenche la publication).
+
+### Sur GitLab, sans runner
+
+Les fichiers `.github/workflows/` ne s'exécutent pas sur GitLab : sans runner, ni CI ni publication automatique.
+Le dépôt reste pourtant complet et autonome, puisque les binaires y sont versionnés :
+
+1. modifier le code, lancer **`build.cmd`** (compilation + autotest, sans SDK ni installation) ;
+2. faire la **recette manuelle** avec Word (§ 10) ;
+3. déposer dans le même commit le code et les binaires mis à jour (`Application/`, `Installation/`), avec le
+   numéro de version de `src/Version.cs` ;
+4. **release manuelle** : dans GitLab, *Déploiement › Versions* (*Deploy › Releases*), « Nouvelle version » sur un
+   tag `vX.Y.Z`, notes copiées de `.github/release-notes/vX.Y.Z.md`, et l'exe (et, si besoin, un zip du dossier
+   `Installation/`) joint au tag ou téléchargé directement depuis le dépôt (`Application/TableauxWordExcel.exe`).
+
+Les tests automatiques ne tournent alors nulle part : les lancer dès qu'un poste avec le SDK (ou un runner) est
+disponible, en particulier avant une version importante.
 
 ## 12. Conventions de code
 
 - **Langue** : interface, messages, journal, commentaires et documentation en français. Les messages
   s'adressent à l'utilisateur (« Word est occupé… », jamais un code d'erreur seul).
-- **Cible** : .NET Framework 4.0, C# 7.3. Pas d'`async`/`await`, pas d'`ExceptionDispatchInfo` (4.5), pas de
-  dépendance NuGet à l'exécution. `dynamic` pour tout accès à Office.
+- **Cible** : .NET Framework 4.0, **C# 5** (compilable par le compilateur de Windows, voir § 9.1 ; imposé par
+  `LangVersion 5`). Pas d'API postérieure à .NET 4.0 (`async`/`await`, `Task.Run`, `ExceptionDispatchInfo`…),
+  pas de dépendance NuGet à l'exécution. `dynamic` pour tout accès à Office.
 - **COM** : chaque appel susceptible d'échouer est isolé (`try`/`catch` au plus près, valeur par défaut
   prudente, ligne dans le journal) ; valeurs converties par `WordCom.AsInt/AsString…` (`wdUndefined` = 9999999) ;
   aucune modification du document pendant l'export.
