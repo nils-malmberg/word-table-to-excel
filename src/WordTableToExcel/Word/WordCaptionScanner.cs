@@ -23,12 +23,17 @@ namespace WordTableToExcel.Word
         private readonly Action<string> _log;
         private string _captionStyleName;
         private bool _captionStyleResolved;
+        private bool _checkRevisions = true;
 
         /// <summary>
         /// Chercher les passages supprimés en suivi des modifications dans les paragraphes voisins (une légende supprimée
         /// n'en est plus une) ; inutile, et évité, si le document n'a aucune modification suivie.
         /// </summary>
-        public bool CheckRevisions { get; set; } = true;
+        public bool CheckRevisions
+        {
+            get { return _checkRevisions; }
+            set { _checkRevisions = value; }
+        }
 
         public WordCaptionScanner(object document, CaptionMatcher matcher, Action<string> log)
         {

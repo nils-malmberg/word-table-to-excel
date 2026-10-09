@@ -102,3 +102,25 @@ jobs:
         with:
           name: Installation
           path: dist/Installation
+
+      # Postes sans SDK .NET : build.cmd compile avec le compilateur C# fourni avec Windows (.NET Framework 4)
+      # et remplace les binaires de Installation/ et Application/ ; on vérifie ce qu'il produit.
+      - name: Compilation sans SDK (build.cmd, compilateur C# de Windows)
+        shell: cmd
+        run: build.cmd
+
+      - name: Complément compilé par build.cmd — import vérifié sur .NET Framework
+        shell: powershell
+        run: ./tests/ci/framework-check.ps1 -Dll Installation/WordTableToExcel.dll -Fixture tests/fixtures/import_complexe.xlsx
+
+      - name: Complément compilé par build.cmd — installation et activation
+        shell: powershell
+        run: ./tests/ci/com-smoke-test.ps1 -Folder Installation
+
+      - name: Application compilée par build.cmd — import vérifié sur .NET Framework
+        shell: powershell
+        run: ./tests/ci/framework-check.ps1 -Dll Application/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx
+
+      - name: Application compilée par build.cmd — autotest et démarrage
+        shell: powershell
+        run: ./tests/ci/app-selftest.ps1 -Exe Application/TableauxWordExcel.exe -Fixture tests/fixtures/import_complexe.xlsx -Output build-cmd-selftest

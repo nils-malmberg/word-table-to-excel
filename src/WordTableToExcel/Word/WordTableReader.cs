@@ -53,11 +53,17 @@ namespace WordTableToExcel.Word
         /// </summary>
         public bool LastReadCellByCell { get; private set; }
 
+        private bool _checkRevisions = true;
+
         /// <summary>
         /// Chercher les suppressions suivies dans les tableaux lus cellule par cellule ; inutile, et évité, si le
         /// document n'a aucune modification suivie (voir <see cref="WordRevisions.DocumentHasRevisions"/>).
         /// </summary>
-        public bool CheckRevisions { get; set; } = true;
+        public bool CheckRevisions
+        {
+            get { return _checkRevisions; }
+            set { _checkRevisions = value; }
+        }
 
         public WordTableReader(object document, Action<string> log)
         {

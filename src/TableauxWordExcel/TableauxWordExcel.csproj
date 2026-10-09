@@ -15,14 +15,11 @@
     <RootNamespace>WordTableToExcel</RootNamespace>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
-    <LangVersion>7.3</LangVersion>
-    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>2.1.0</Version>
-    <AssemblyVersion>2.1.0.0</AssemblyVersion>
-    <FileVersion>2.1.0.0</FileVersion>
-    <Product>Tableaux Word ↔ Excel</Product>
-    <AssemblyTitle>Tableaux Word ↔ Excel</AssemblyTitle>
-    <Description>Exporte les tableaux de documents Word vers Excel et importe des tableaux Excel dans Word, en conservant la mise en forme.</Description>
+    <!-- C# 5 : compilable aussi par le compilateur fourni avec Windows (build.cmd), voir WordTableToExcel.csproj. -->
+    <LangVersion>5</LangVersion>
+    <!-- Version et attributs d'assemblage : src/Version.cs et Properties/AssemblyInfo.cs (aussi compilés par build.cmd). -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <Deterministic>true</Deterministic>
     <ApplicationIcon>TableauxWordExcel.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -47,7 +44,9 @@
   <ItemGroup>
     <!-- Code de l'application -->
     <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="App\**\*.cs" />
+    <Compile Include="..\Version.cs" Link="Properties\Version.cs" />
     <!-- Code partagé avec le complément (tout sauf AddIn\, propre au chargement dans Word) -->
     <Compile Include="..\WordTableToExcel\Core\**\*.cs" Link="Shared\Core\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\WordTableToExcel\Word\**\*.cs" Link="Shared\Word\%(RecursiveDir)%(Filename)%(Extension)" />

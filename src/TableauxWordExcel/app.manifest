@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="2.1.0.0" name="TableauxWordExcel.app" />
+  <!-- Identité technique du manifeste, fixe : le numéro de version de l'application est dans src/Version.cs. -->
+  <assemblyIdentity version="1.0.0.0" name="TableauxWordExcel.app" />
 
   <!-- Droits de l'utilisateur, sans élévation : Word et l'application doivent tourner au même niveau. -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">

@@ -1,4 +1,11 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
+
+// Version : src/Version.cs (commun à l'application et au complément).
+[assembly: AssemblyTitle("WordTableToExcel")]
+[assembly: AssemblyProduct("Tableaux Word vers Excel")]
+[assembly: AssemblyCompany("WordTableToExcel")]
+[assembly: AssemblyDescription("Complément COM Word : exporte les tableaux du document vers Excel et importe des tableaux Excel dans Word, en conservant la mise en forme.")]
 
 // Seules les classes explicitement marquées [ComVisible(true)] sont exposées à COM.
 [assembly: ComVisible(false)]
