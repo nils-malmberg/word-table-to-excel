@@ -5,7 +5,7 @@ arborescence, architecture, déroulement détaillé de l'export et de l'import, 
 complément Word (gelé), réglages, compilation, tests, intégration continue, publication, conventions et
 pièges connus de Word. Le mode d'emploi utilisateur est dans le [README](README.md).
 
-Version actuelle : **2.1.0** (numéro dans `src/Version.cs`).
+Version actuelle : **2.1.1** (numéro dans `src/Version.cs`).
 
 ---
 
